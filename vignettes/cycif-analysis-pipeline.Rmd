@@ -1,0 +1,242 @@
+---
+title: "CyCIF Analysis Pipeline"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{CyCIF Analysis Pipeline}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+```{r setup}
+library(cycif.importer)
+library(dplyr)
+```
+
+# Overview
+
+The `cycif.importer` package provides a comprehensive toolkit for analyzing CyCIF (Cyclic Immunofluorescence) multiplexed tissue imaging data. The package implements a modular three-stage pipeline:
+
+1. **Import & Gate**: Load cell data, assign ROIs, and apply gating thresholds
+2. **Sample**: Sample cells according to specified strategy and size
+3. **Summarize**: Generate summary statistics with optional metadata
+
+# Quick Start
+
+## Complete Pipeline
+
+For most users, the simplest approach is to use the complete pipeline function:
+
+```{r complete_pipeline}
+# Run complete pipeline with default settings
+results <- run_complete_pipeline(
+  data_dir = "/path/to/unmicst/data",
+  roi_dir = "/path/to/roi/data",
+  gate_table_path = "/path/to/gates.csv",
+  output_dir = "/path/to/output"
+)
+```
+
+## Modular Approach
+
+For more control, you can run each stage separately:
+
+```{r modular}
+# Stage 1: Import and Gate
+cell_data <- load_cell_data("/path/to/data")
+roi_data <- load_roi_data("/path/to/rois")
+gate_thresholds <- readr::read_csv("/path/to/gates.csv")
+
+gated_data <- cycif_import_and_gate(
+  cell_data = cell_data,
+  roi_data = roi_data,
+  gate_thresholds = gate_thresholds
+)
+
+# Add marker combinations
+marker_combos <- get_default_marker_combinations()
+gated_data <- calculate_marker_combinations(gated_data, marker_combos)
+
+# Stage 2: Sample
+sampled_data <- cycif_sample(
+  gated_data = gated_data,
+  sample_size = 50000,
+  sampling_mode = "all_cells"
+)
+
+# Stage 3: Summarize
+results <- cycif_summarize(
+  sampled_data = sampled_data,
+  summary_filters = list("panCK+" = ~PanCKp, "CD8+" = ~CD8ap)
+)
+
+# Save results
+save_cycif_results(results, "/path/to/output")
+```
+
+# Data Requirements
+
+## Input Files
+
+- **Cell data**: `*--unmicst_cell.csv` files with cell segmentation results
+- **ROI data**: `*-rois.csv` files with polygon coordinates (optional)
+- **Gate thresholds**: CSV with slide names and marker thresholds (optional)
+- **Metadata**: CSV files with slide or ROI metadata (optional)
+
+## File Formats
+
+### Cell Data
+```
+CellID, X_centroid, Y_centroid, Area, marker1, marker2, ...
+1, 100.5, 200.3, 45.2, 0.123, 0.456, ...
+```
+
+### ROI Data
+```
+Name, type, all_points
+"ROI_1", "Polygon", "100,200 150,200 150,250 100,250"
+```
+
+### Gate Thresholds
+```
+slideName, marker1, marker2, marker3, ...
+slide1, 2.5, 3.1, 1.8, ...
+slide2, 2.3, 3.2, 1.9, ...
+```
+
+# Marker Combinations
+
+## Default Combinations
+
+The package includes comprehensive default marker combinations:
+
+```{r default_markers}
+default_combos <- get_default_marker_combinations()
+print(names(default_combos))
+```
+
+## Custom Combinations
+
+You can define custom marker combinations using formula syntax:
+
+```{r custom_markers}
+custom_combos <- list(
+  # Simple combinations
+  activated_cd8 = ~CD8ap & Ki67p,
+  exhausted_cd8 = ~CD8ap & PD1p & LAG3p,
+
+  # Complex combinations
+  ifn_positive = ~pSTAT1p | pSTAT3p | HLA_Ep,
+  regulatory_t = ~CD4p & !Ki67p & LAG3p
+)
+
+# Apply to data
+data_with_combos <- calculate_marker_combinations(gated_data, custom_combos)
+```
+
+# Sampling Strategies
+
+## All Cells
+Sample from all cells regardless of ROI assignment:
+
+```{r sample_all}
+sampled_all <- cycif_sample(
+  gated_data,
+  sample_size = 25000,
+  sampling_mode = "all_cells"
+)
+```
+
+## ROI Only
+Sample only from cells within defined ROIs:
+
+```{r sample_roi}
+sampled_roi <- cycif_sample(
+  gated_data,
+  sample_size = 10000,
+  sampling_mode = "roi_only"
+)
+```
+
+# Summary Filters
+
+Create stratified summaries based on cell populations:
+
+```{r summary_filters}
+custom_filters <- list(
+  "Epithelial" = ~PanCKp,
+  "CD8_T_cells" = ~CD8ap & !PanCKp,
+  "CD4_T_cells" = ~CD4p & !PanCKp,
+  "Activated_T" = ~(CD8ap | CD4p) & Ki67p,
+  "Immune_infiltrate" = ~!PanCKp
+)
+
+results <- cycif_summarize(
+  sampled_data,
+  summary_filters = custom_filters
+)
+```
+
+# Results Structure
+
+The pipeline returns a list with three components:
+
+- `roi_summaries`: Overall statistics by slide and ROI
+- `sampled_cells`: The sampled cell-level data
+- `stratified_summaries`: Named list of filtered summaries
+
+```{r results}
+# Access different result components
+overall_stats <- results$roi_summaries
+cell_data <- results$sampled_cells
+epithelial_stats <- results$stratified_summaries$Epithelial
+```
+
+# Advanced Usage
+
+## ROI Expansion
+
+Expand ROI boundaries to include nearby cells:
+
+```{r roi_expansion}
+gated_data <- cycif_import_and_gate(
+  cell_data = cell_data,
+  roi_data = roi_data,
+  expand_distance = 100  # microns
+)
+```
+
+## Custom Double Gates
+
+Define custom double marker gates:
+
+```{r double_gates}
+custom_double_gates <- data.frame(
+  marker1 = c("CD8a", "CD4", "PD1"),
+  marker2 = c("GZMB", "FOXP3", "LAG3")
+)
+
+gated_data <- cycif_import_and_gate(
+  cell_data = cell_data,
+  double_gates_df = custom_double_gates
+)
+```
+
+## Processing Specific Slides
+
+Process only a subset of slides:
+
+```{r slide_filter}
+results <- run_complete_pipeline(
+  data_dir = "/path/to/data",
+  output_dir = "/path/to/output",
+  slide_filter = c("slide_001", "slide_005", "slide_010")
+)
+```
