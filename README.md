@@ -112,12 +112,12 @@ data_with_combos <- calculate_marker_combinations(gated_data, custom_combos)
 
 ### Input File Formats
 
-**Cell Data**: `*--unmicst_cell.csv`
+**Cell Data**: `*--unmicst_cell.csv(.gz)`
 - Required columns: `CellID`, `X_centroid`, `Y_centroid`, marker columns
 - Marker columns should contain raw intensity values
 
 **ROI Data**: `*-rois.csv` (optional)
-- Required columns: `Name`, `all_points`
+- Required columns: `all_points`
 - `all_points` format: "x1,y1 x2,y2 x3,y3 ..." (space-separated coordinate pairs)
 
 **Gate Thresholds**: CSV file (optional)
@@ -126,7 +126,7 @@ data_with_combos <- calculate_marker_combinations(gated_data, custom_combos)
 
 **Metadata**: CSV files (optional)
 - Slide metadata: must include `slideName` column
-- ROI metadata: must include `ROIname` column
+- ROI metadata: must include `ROIname` column (to match with `Name` in ROI data)
 
 ## Advanced Usage
 

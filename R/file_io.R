@@ -1,9 +1,9 @@
 #' Load cell data from UNMICST files
 #'
 #' Loads cell segmentation data from UNMICST CSV files in a directory.
-#' Files should follow the naming pattern "*--unmicst_cell.csv".
+#' Files should follow the naming pattern "*--unmicst_cell.csv(.gz)".
 #'
-#' @param data_dir Directory containing *--unmicst_cell.csv files
+#' @param data_dir Directory containing *--unmicst_cell.csv(.gz) files
 #' @param slide_filter Optional vector of slide names to load
 #'
 #' @return List of data frames by slide name
@@ -18,11 +18,11 @@
 #' cell_data <- cycif_load_cell_data("/path/to/data", slide_filter = c("slide1", "slide2"))
 #' }
 cycif_load_cell_data <- function(data_dir, slide_filter = NULL) {
-  file_list <- list.files(data_dir, pattern = "--unmicst_cell\\.csv$", full.names = TRUE)
-  slide_names <- stringr::str_replace(basename(file_list), "--unmicst_cell\\.csv", "")
+  file_list <- list.files(data_dir, pattern = "--unmicst_cell\\.csv(?:\\.gz)?$", full.names = TRUE)
+  slide_names <- stringr::str_replace(basename(file_list), "--unmicst_cell\\.csv(?:\\.gz)?$", "")
 
   if (length(file_list) == 0) {
-    stop("No --unmicst_cell.csv files found in data directory")
+    stop("No --unmicst_cell.csv(.gz) files found in data directory")
   }
 
   # Apply slide filter if provided

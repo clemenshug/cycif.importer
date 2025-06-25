@@ -12,6 +12,9 @@
 #' @param summary_filters Named list of formula expressions for creating
 #'   stratified summaries. Default creates PanCK+/- summaries.
 #'   Example: `list("panCK+" = ~PanCKp, "CD8+" = ~CD8ap)`
+#' @param summary_groups Named list of character vectors defining different
+#'   grouping strategies for summaries. Default groups by ROI.
+#'   Example: `list("by_roi" = c("slideName", "ROI", "ROIname"), by_slide = c("slideName"))`
 #' @param sampling_mode Sampling mode, either "all_cells" or "roi_only"
 #' @param sample_size Number of cells to sample per slide (NULL for no sampling)
 #' @param marker_combinations List of marker combination definitions. If NULL,
@@ -52,6 +55,11 @@ cycif_pipeline <- function(
   roi_info_path = NULL,
   output_dir,
   summary_filters = list(`panCK+` = ~PanCKp, `panCK-` = ~!PanCKp),
+  summary_groups = list(
+    by_roi = c("slideName", "ROI", "ROIname"),
+    by_slide = c("slideName"),
+    by_roi_type = c("slideName", "ROIname")
+  ),
   sampling_mode = "all_cells",
   sample_size = 50000,
   marker_combinations = NULL,
@@ -139,17 +147,38 @@ cycif_pipeline <- function(
     sampling_mode = sampling_mode
   )
 
+  sampled_with_meta <- sampled_data
+  if (!is.null(slide_metadata)) {
+    message("Adding slide metadata...")
+    sampled_with_meta <- cycif_add_slide_metadata(
+      sampled_data,
+      slide_metadata
+    )
+  }
+  if (!is.null(roi_metadata)) {
+    message("Adding ROI metadata...")
+    sampled_with_meta <- cycif_add_roi_metadata(
+      sampled_with_meta,
+      roi_metadata
+    )
+  }
+
   message("Summarizing results...")
-  final_result <- cycif_summarize(
-    sampled_data,
-    slide_metadata,
-    roi_metadata,
-    summary_filters
+  summarized_data <- cycif_summarize(
+    sampled_with_meta,
+    summary_filters = summary_filters,
+    summary_groups = summary_groups
   )
 
   # Save results
-  cycif_save_results(final_result, output_dir)
+  # cycif_save_results(final_result, output_dir)
 
   message("Pipeline complete!")
-  return(final_result)
+  return(
+    list(
+      all_cells = gated_data,
+      sampled_data = sampled_with_meta
+    ) %>%
+     c(summarized_data)
+  )
 }

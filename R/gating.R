@@ -26,7 +26,7 @@ cycif_apply_gates <- function(
   gate_thresholds = NULL,
   double_gates = NULL
 ) {
-  if (is.null(gate_thresholds) && is.null(double_gates)) {
+  if (is.null(gate_thresholds) && is.null(double_gates_df)) {
     message("No gates provided, returning data unchanged")
     return(processed_data)
   }
