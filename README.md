@@ -95,12 +95,18 @@ results <- cycif_pipeline(
 )
 ```
 
-The `ouptput_dir` directory will contain the following files: -
-`sampled_cells.csv.gz`: Cells sampled from the dataset with gates and
-ROI assignments - Summaries for each of the defined filter and grouping
-combinations e.g. - `by_roi__PanCK+.csv.gz`: Summary statistics grouped
-by ROI including only PanCK+ cells - `by_slide__CD8+.csv.gz`: Summary
-statistics grouped by slide including only CD8+ cells
+The `output_dir` directory will contain the following files:
+
+- `sampled_cells.csv.gz`: Cells sampled from the dataset with gates and
+  ROI assignments
+- Summaries for each of the defined filter and grouping combinations
+  e.g.
+  - `by_roi__PanCK+.csv.gz`: Summary statistics grouped by ROI including
+    only PanCK+ cells
+  - `by_slide__CD8+.csv.gz`: Summary statistics grouped by slide
+    including only CD8+ cells
+
+<!-- -->
 
     #>  [1] "sampled_cells.csv.gz"               "summary_by_roi__CD4+.csv.gz"       
     #>  [3] "summary_by_roi__CD8+.csv.gz"        "summary_by_roi__PanCK-.csv.gz"     
@@ -148,28 +154,30 @@ summaries <- cycif_summarize(
 
 ## Data Formats
 
-### Input Data Structure
-
 The package expects specific input file formats. Here are examples using
 the built-in test data:
 
-#### Cell Quantification Data (UNMICST Output)
+### Cell Quantification Data (UNMICST Output)
 
-**Directory Structure:** The cell quantification data directory should
-contain one `.csv` or `.csv.gz` file per slide:
+Cell-level quantification files from UNMICST segmentation (`.csv` or
+`.csv.gz` format)
+
+#### Directory Structure
+
+The cell quantification data directory should contain one `.csv` or
+`.csv.gz` file per slide:
 
     data_dir/
     ├── LSP11060--unmicst_cell.csv.gz
     ├── LSP11064--unmicst_cell.csv.gz
     └── LSP11065--unmicst_cell.csv
 
-**File Naming Convention:** - Files should follow the pattern:
-`{slideName}--unmicst_cell.csv[.gz]` - The `slideName` portion (before
-`--unmicst_cell`) must match the `slideName` in your gate thresholds
-file - Compressed (`.gz`) files are automatically detected and handled
+- Files should follow the pattern: `{slideName}--unmicst_cell.csv[.gz]`
+- The `slideName` portion (before `--unmicst_cell`) must match the
+  `slideName` in your gate thresholds file
+- Compressed (`.gz`) files are automatically detected and handled
 
-Cell-level quantification files from UNMICST segmentation (`.csv` or
-`.csv.gz` format):
+#### Example
 
 | CellID | X_centroid | Y_centroid | Area |  PanCK |    CD8a |     CD4 |  FoxP3 |
 |-------:|-----------:|-----------:|-----:|-------:|--------:|--------:|-------:|
@@ -179,15 +187,19 @@ Cell-level quantification files from UNMICST segmentation (`.csv` or
 
 Example Cell Quantification Data
 
-**Required columns:** - `CellID`: Unique cell identifier - `X_centroid`,
-`Y_centroid`: Cell center coordinates (pixels) - **Marker columns**:
-Quantified intensity values for each marker
+**Required columns**:
 
-**Optional columns:** - `Area`: Cell area - `MajorAxisLength`,
-`MinorAxisLength`: Cell shape metrics - Additional morphological
-features
+- `CellID`: Unique cell identifier
+- `X_centroid`, `Y_centroid`: Cell center coordinates (pixels)
+- **Marker columns**: Quantified intensity values for each marker
 
-#### Gate Thresholds File
+**Optional columns**:
+
+- `Area`: Cell area
+- `MajorAxisLength`, `MinorAxisLength`: Cell shape metrics
+- Additional morphological features
+
+### Gate Thresholds File
 
 CSV file containing marker intensity thresholds for each slide:
 
@@ -198,26 +210,32 @@ CSV file containing marker intensity thresholds for each slide:
 
 Example Gate Thresholds (log2 transformed intensities)
 
-**Required columns:** - `slideName`: Must match slide names in cell data
-files - **Marker columns**: Log2-transformed intensity thresholds for
-each marker
+**Required columns**:
 
-#### Region of Interest (ROI) Files
+- `slideName`: Must match slide names in cell data files
+- **Marker columns**: Log2-transformed intensity thresholds for each
+  marker
 
-**Directory Structure:** The ROI directory should contain one `.csv`
-file per slide with ROI definitions:
+### Region of Interest (ROI) Files
+
+CSV files defining polygon regions for each slide.
+
+#### Directory Structure
+
+The ROI directory should contain one `.csv` file per slide with ROI
+definitions:
 
     roi_dir/
     ├── LSP11060-rois.csv
     ├── LSP11064-rois.csv
     └── LSP11065-rois.csv
 
-**File Naming Convention:** - Files should follow the pattern:
-`{slideName}-rois.csv` - The `slideName` portion (before `-rois`) must
-match the slide names in your cell quantification files - Each file
-contains all ROI polygons for that specific slide
+- Files should follow the pattern: `{slideName}-rois.csv`
+- The `slideName` portion (before `-rois`) must match the slide names in
+  your cell quantification files
+- Each file contains all ROI polygons for that specific slide
 
-CSV files defining polygon regions for each slide:
+#### Example
 
 |    Id | Name                | Text                | type    |
 |------:|:--------------------|:--------------------|:--------|
@@ -227,14 +245,18 @@ CSV files defining polygon regions for each slide:
 
 Example ROI Definitions
 
-**Required columns:** - `Id`: Unique ROI identifier - `Name`: ROI
-name/identifier - `all_points`: Polygon coordinates as “x1,y1 x2,y2 …”
-string
+**Required columns**:
 
-**Optional columns:** - `Text`: ROI description - Geometric properties
-(X, Y, Width, Height, etc.)
+- `Id`: Unique ROI identifier
+- `Name`: ROI name/identifier
+- `all_points`: Polygon coordinates as “x1,y1 x2,y2 …” string
 
-#### Slide Metadata (Optional)
+**Optional columns**:
+
+- `Text`: ROI description
+- Geometric properties (X, Y, Width, Height, etc.)
+
+### Slide Metadata (Optional)
 
 CSV file with additional slide-level information:
 
@@ -245,12 +267,15 @@ CSV file with additional slide-level information:
 
 Example Slide Metadata Structure
 
-**Required columns:** - `slideName`: Must match slide names in other
-files
+**Required columns**:
 
-**Optional columns:** - Any additional slide-level annotations
+- `slideName`: Must match slide names in other files
 
-#### ROI Metadata (Optional)
+**Optional columns**:
+
+- Any additional slide-level annotations
+
+### ROI Metadata (Optional)
 
 CSV file with additional ROI-level information:
 
@@ -262,10 +287,13 @@ CSV file with additional ROI-level information:
 
 Example ROI Metadata Structure
 
-**Required columns:** - `ROIname`: Must match ROI names in ROI
-definition files
+**Required columns**:
 
-**Optional columns:** - Any additional ROI-level annotations
+- `ROIname`: Must match ROI names in ROI definition files
+
+**Optional columns**:
+
+- Any additional ROI-level annotations
 
 ### Output Data
 

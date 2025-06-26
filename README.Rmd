@@ -98,7 +98,8 @@ results <- cycif_pipeline(
 )
 ```
 
-The `ouptput_dir` directory will contain the following files:
+The `output_dir` directory will contain the following files:
+
 - `sampled_cells.csv.gz`: Cells sampled from the dataset with gates and ROI assignments
 - Summaries for each of the defined filter and grouping combinations e.g.
   - `by_roi__PanCK+.csv.gz`: Summary statistics grouped by ROI including only PanCK+ cells
@@ -146,13 +147,14 @@ summaries <- cycif_summarize(
 
 ## Data Formats
 
-### Input Data Structure
-
 The package expects specific input file formats. Here are examples using the built-in test data:
 
-#### Cell Quantification Data (UNMICST Output)
+### Cell Quantification Data (UNMICST Output)
 
-**Directory Structure:**
+Cell-level quantification files from UNMICST segmentation (`.csv` or `.csv.gz` format)
+
+#### Directory Structure
+
 The cell quantification data directory should contain one `.csv` or `.csv.gz` file per slide:
 
 ```
@@ -162,12 +164,11 @@ data_dir/
 └── LSP11065--unmicst_cell.csv
 ```
 
-**File Naming Convention:**
 - Files should follow the pattern: `{slideName}--unmicst_cell.csv[.gz]`
 - The `slideName` portion (before `--unmicst_cell`) must match the `slideName` in your gate thresholds file
 - Compressed (`.gz`) files are automatically detected and handled
 
-Cell-level quantification files from UNMICST segmentation (`.csv` or `.csv.gz` format):
+#### Example
 
 ```{r cell-data-example, echo=FALSE, message=FALSE, warning=FALSE}
 # Load actual example cell data
@@ -186,17 +187,19 @@ if (file.exists(cell_file)) {
 }
 ```
 
-**Required columns:**
+**Required columns**:
+
 - `CellID`: Unique cell identifier
 - `X_centroid`, `Y_centroid`: Cell center coordinates (pixels)
 - **Marker columns**: Quantified intensity values for each marker
 
-**Optional columns:**
+**Optional columns**:
+
 - `Area`: Cell area
 - `MajorAxisLength`, `MinorAxisLength`: Cell shape metrics
 - Additional morphological features
 
-#### Gate Thresholds File
+### Gate Thresholds File
 
 CSV file containing marker intensity thresholds for each slide:
 
@@ -225,13 +228,16 @@ if (file.exists(gate_file)) {
 }
 ```
 
-**Required columns:**
+**Required columns**:
+
 - `slideName`: Must match slide names in cell data files
 - **Marker columns**: Log2-transformed intensity thresholds for each marker
 
-#### Region of Interest (ROI) Files
+### Region of Interest (ROI) Files
 
-**Directory Structure:**
+CSV files defining polygon regions for each slide.
+
+#### Directory Structure
 The ROI directory should contain one `.csv` file per slide with ROI definitions:
 
 ```
@@ -241,12 +247,11 @@ roi_dir/
 └── LSP11065-rois.csv
 ```
 
-**File Naming Convention:**
 - Files should follow the pattern: `{slideName}-rois.csv`
 - The `slideName` portion (before `-rois`) must match the slide names in your cell quantification files
 - Each file contains all ROI polygons for that specific slide
 
-CSV files defining polygon regions for each slide:
+#### Example
 
 ```{r roi-example, echo=FALSE, message=FALSE, warning=FALSE}
 # Load actual example ROI data
@@ -272,16 +277,18 @@ if (file.exists(roi_file)) {
 }
 ```
 
-**Required columns:**
+**Required columns**:
+
 - `Id`: Unique ROI identifier
 - `Name`: ROI name/identifier
 - `all_points`: Polygon coordinates as "x1,y1 x2,y2 ..." string
 
-**Optional columns:**
+**Optional columns**:
+
 - `Text`: ROI description
 - Geometric properties (X, Y, Width, Height, etc.)
 
-#### Slide Metadata (Optional)
+### Slide Metadata (Optional)
 
 CSV file with additional slide-level information:
 
@@ -299,13 +306,15 @@ slide_meta <- data.frame(
 knitr::kable(slide_meta, caption = "Example Slide Metadata Structure")
 ```
 
-**Required columns:**
+**Required columns**:
+
 - `slideName`: Must match slide names in other files
 
-**Optional columns:**
+**Optional columns**:
+
 - Any additional slide-level annotations
 
-#### ROI Metadata (Optional)
+### ROI Metadata (Optional)
 
 CSV file with additional ROI-level information:
 
@@ -321,13 +330,16 @@ roi_meta <- data.frame(
 knitr::kable(roi_meta, caption = "Example ROI Metadata Structure")
 ```
 
-**Required columns:**
+**Required columns**:
+
 - `ROIname`: Must match ROI names in ROI definition files
 
-**Optional columns:**
+**Optional columns**:
+
 - Any additional ROI-level annotations
 
 ### Output Data
+
 - **Sampled Cells**: Cell-level data with gates, ROI assignments, and metadata
 - **Summaries**: Aggregated statistics by user-defined groups and filters
 
