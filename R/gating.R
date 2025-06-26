@@ -3,7 +3,7 @@
 #' Applies single and double marker gating thresholds to cell data.
 #' Returns gated data as list of dataframes by slide.
 #'
-#' @param processed_data List of dataframes by slide name (output from
+#' @param data List of dataframes by slide name (output from
 #'   cycif_import_and_assign_rois)
 #' @param gate_thresholds Data frame with gating thresholds by slide and marker
 #'   (optional)
@@ -17,37 +17,39 @@
 #' \dontrun{
 #' # Apply gates to processed data
 #' gated_data <- cycif_apply_gates(
-#'   processed_data = processed_data,
+#'   data = data,
 #'   gate_thresholds = my_gates
 #' )
 #' }
 cycif_apply_gates <- function(
-  processed_data,
+  data,
   gate_thresholds = NULL,
   double_gates = NULL
 ) {
-  if (is.null(gate_thresholds) && is.null(double_gates_df)) {
+  data <- standardize_input_data(data)
+
+  if (is.null(gate_thresholds) && is.null(double_gates)) {
     message("No gates provided, returning data unchanged")
-    return(processed_data)
+    return(data)
   }
 
-  slide_names <- names(processed_data)
+  slide_names <- names(data)
   gated_slides <- list()
 
   for (slide_name in slide_names) {
     message(sprintf("Applying gates to slide: %s", slide_name))
-    data1 <- processed_data[[slide_name]]
+    data_slide <- data[[slide_name]]
 
     # Apply gates if thresholds provided
     if (!is.null(gate_thresholds)) {
-      data1 <- apply_single_gates(data1, gate_thresholds, slide_name)
+      data_slide <- apply_single_gates(data_slide, gate_thresholds, slide_name)
     }
 
     if (!is.null(double_gates)) {
-      data1 <- apply_double_gates(data1, double_gates)
+      data_slide <- apply_double_gates(data_slide, double_gates)
     }
 
-    gated_slides[[slide_name]] <- data1
+    gated_slides[[slide_name]] <- data_slide
   }
 
   return(gated_slides)
@@ -55,46 +57,46 @@ cycif_apply_gates <- function(
 
 #' Apply single marker gates
 #'
-#' @param data1 Data frame with marker measurements
+#' @param data Data frame with marker measurements
 #' @param gate_thresholds Data frame with gating thresholds
 #' @param slide_name Name of the current slide
 #'
 #' @return Data frame with gating results added as logical columns
-#' @keywords internal
-apply_single_gates <- function(data1, gate_thresholds, slide_name) {
+#' @export
+apply_single_gates <- function(data, gate_thresholds, slide_name) {
   # Find gate thresholds for this slide
   slide_gates <- gate_thresholds %>%
     dplyr::filter(slideName == slide_name)
 
   if (nrow(slide_gates) == 0) {
     message(sprintf("  No gate thresholds found for %s", slide_name))
-    return(data1)
+    return(data)
   }
 
   # Get all marker columns (exclude slideName)
   marker_cols <- setdiff(names(gate_thresholds), "slideName")
 
   for (marker in marker_cols) {
-    if (marker %in% names(data1)) {
+    if (marker %in% names(data)) {
       gate_value <- slide_gates[[marker]][1]
       if (!is.na(gate_value)) {
         gate_name <- paste0(marker, "p")
-        data1[[gate_name]] <- data1[[marker]] > exp(gate_value)
+        data[[gate_name]] <- data[[marker]] > exp(gate_value)
       }
     }
   }
 
-  return(data1)
+  return(data)
 }
 
 #' Apply double marker gates
 #'
-#' @param data1 Data frame with single marker gates
+#' @param data Data frame with single marker gates
 #' @param double_gates_df Data frame with marker1, marker2 columns for double gates
 #'
 #' @return Data frame with double gates added
-#' @keywords internal
-apply_double_gates <- function(data1, double_gates_df) {
+#' @export
+apply_double_gates <- function(data, double_gates_df) {
   # Use default double gates if not provided
   if (is.null(double_gates_df)) {
     double_gates_df <- get_default_double_gates()
@@ -105,12 +107,12 @@ apply_double_gates <- function(data1, double_gates_df) {
     gate2_name <- paste0(double_gates_df$marker2[j], "p")
     double_gate_name <- paste0(gate1_name, gate2_name)
 
-    if (gate1_name %in% names(data1) && gate2_name %in% names(data1)) {
-      data1[[double_gate_name]] <- data1[[gate1_name]] & data1[[gate2_name]]
+    if (gate1_name %in% names(data) && gate2_name %in% names(data)) {
+      data[[double_gate_name]] <- data[[gate1_name]] & data[[gate2_name]]
     }
   }
 
-  return(data1)
+  return(data)
 }
 
 
@@ -167,6 +169,9 @@ cycif_marker_combinations <- function(data, marker_combinations) {
     })
   }
 
+  missing_vars_all <- character()
+  missing_combinations <- character()
+
   apply_marker_combinations <- function(data1) {
     # Evaluate each formula and add to data
     new_columns <- list()
@@ -183,6 +188,8 @@ cycif_marker_combinations <- function(data, marker_combinations) {
         if (length(missing_vars) > 0) {
           message(sprintf("Skipping %s: missing columns %s",
                           col_name, paste(missing_vars, collapse = ", ")))
+          missing_vars_all <<- c(missing_vars_all, missing_vars)
+          missing_combinations <<- c(missing_combinations, col_name)
           next
         }
 
@@ -204,7 +211,10 @@ cycif_marker_combinations <- function(data, marker_combinations) {
     return(data1)
   }
 
-  lapply(data, apply_marker_combinations)
+  res <- lapply(data, apply_marker_combinations)
+  attr(res, "missing_vars") <- unique(missing_vars_all)
+  attr(res, "missing_combinations") <- unique(missing_combinations)
+  res
 }
 
 #' Get default marker combinations
@@ -233,16 +243,16 @@ get_default_marker_combinations <- function() {
     CD8apGZMBp = ~CD8ap & GZMBp,
 
     # IFN pathway (OR of multiple markers)
-    IFNP = ~pTBK1p | pSTAT1p | pSTAT3p | HLA_Ep,
+    IFNP = ~pTBK1p | pSTAT1p | pSTAT3p | `HLA-Ep`,
 
     # APC combinations
-    CD11cpCD103pHLADRpCD68n = ~CD11cp & CD103p & HLADRp & !CD68p,
+    CD11cpCD103pHLADRpCD68n = ~CD11cp & CD103p & `HLA DRp` & !CD68p,
     CD11cpCD68nCD103p = ~CD11cp & CD103p & !CD68p,
     CD11cpCD103n = ~CD11cp & !CD103p,
     CD11cpCD68pCD103n = ~CD11cp & CD68p & !CD103p,
     CD11cpCD68nCD103n = ~CD11cp & !CD68p & !CD103p,
-    CD11cpCD103nHLADRpCD68p = ~CD11cp & !CD103p & HLADRp & CD68p,
-    CD11cpCD103nHLADRpCD68n = ~CD11cp & !CD103p & HLADRp & !CD68p,
+    CD11cpCD103nHLADRpCD68p = ~CD11cp & !CD103p & `HLA DRp` & CD68p,
+    CD11cpCD103nHLADRpCD68n = ~CD11cp & !CD103p & `HLA DRp` & !CD68p,
 
     # Activated T cells (complex expression)
     CD8apPD1pKi67pLAG3n = ~((CD8ap & PD1p) | (CD8ap & Ki67p)) & !LAG3p

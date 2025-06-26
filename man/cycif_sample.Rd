@@ -4,10 +4,10 @@
 \alias{cycif_sample}
 \title{Sample cells}
 \usage{
-cycif_sample(gated_data, sample_size = 50000, sampling_mode = "all_cells")
+cycif_sample(data, sample_size = 50000, sampling_mode = "all_cells")
 }
 \arguments{
-\item{gated_data}{List of dataframes by slide, single dataframe with
+\item{data}{List of dataframes by slide, single dataframe with
 slideName}
 
 \item{sample_size}{Number of cells to sample per slide (NULL for no sampling)}
@@ -23,11 +23,11 @@ Samples cells according to specified strategy and size.
 \examples{
 \dontrun{
 # Sample 10,000 cells from all cells
-sampled_data <- cycif_sample(gated_data, sample_size = 10000)
+sampled_data <- cycif_sample(data, sample_size = 10000)
 
 # Sample only from ROI cells
 sampled_data <- cycif_sample(
-  gated_data,
+  data,
   sample_size = 5000,
   sampling_mode = "roi_only"
 )

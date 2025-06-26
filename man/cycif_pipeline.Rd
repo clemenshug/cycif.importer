@@ -11,7 +11,9 @@ cycif_pipeline(
   slide_info_path = NULL,
   roi_info_path = NULL,
   output_dir,
-  summary_filters = list(`panCK+` = ~PanCKp, `panCK-` = ~!PanCKp),
+  summary_filters = list(`PanCK+` = ~PanCKp, `PanCK-` = ~!PanCKp),
+  summary_groups = list(by_roi = c("slideName", "ROI", "ROIname"), by_slide =
+    c("slideName"), by_roi_type = c("slideName", "ROIname")),
   sampling_mode = "all_cells",
   sample_size = 50000,
   marker_combinations = NULL,
@@ -37,6 +39,10 @@ cycif_pipeline(
 \item{summary_filters}{Named list of formula expressions for creating
 stratified summaries. Default creates PanCK+/- summaries.
 Example: \code{list("panCK+" = ~PanCKp, "CD8+" = ~CD8ap)}}
+
+\item{summary_groups}{Named list of character vectors defining different
+grouping strategies for summaries. Default groups by ROI.
+Example: \code{list("by_roi" = c("slideName", "ROI", "ROIname"), by_slide = c("slideName"))}}
 
 \item{sampling_mode}{Sampling mode, either "all_cells" or "roi_only"}
 

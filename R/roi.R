@@ -70,13 +70,13 @@ cycif_assign_rois <- function(
 #'
 #' @return Data frame with standardized coordinate columns
 #' @keywords internal
-standardize_coordinates <- function(data1, scale_factor) {
+standardize_coordinates <- function(data, scale_factor) {
   # Rename coordinate columns to match MATLAB naming
-  names(data1) <- stringr::str_replace(names(data1), "X_centroid", "Xt")
-  names(data1) <- stringr::str_replace(names(data1), "Y_centroid", "Yt")
+  names(data) <- stringr::str_replace(names(data), "X_centroid", "Xt")
+  names(data) <- stringr::str_replace(names(data), "Y_centroid", "Yt")
 
   # Convert coordinates from pixels to microns
-  data1 <- data1 %>%
+  data <- data %>%
     dplyr::mutate(
       dplyr::across(
         dplyr::any_of(c("Xt", "Yt")),
@@ -84,7 +84,7 @@ standardize_coordinates <- function(data1, scale_factor) {
       )
     )
 
-  return(data1)
+  return(data)
 }
 
 #' Assign ROIs to cells based on polygon coordinates

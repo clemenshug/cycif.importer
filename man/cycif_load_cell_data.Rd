@@ -7,7 +7,7 @@
 cycif_load_cell_data(data_dir, slide_filter = NULL)
 }
 \arguments{
-\item{data_dir}{Directory containing *--unmicst_cell.csv files}
+\item{data_dir}{Directory containing *--unmicst_cell.csv(.gz) files}
 
 \item{slide_filter}{Optional vector of slide names to load}
 }
@@ -16,7 +16,7 @@ List of data frames by slide name
 }
 \description{
 Loads cell segmentation data from UNMICST CSV files in a directory.
-Files should follow the naming pattern "*--unmicst_cell.csv".
+Files should follow the naming pattern "*--unmicst_cell.csv(.gz)".
 }
 \examples{
 \dontrun{

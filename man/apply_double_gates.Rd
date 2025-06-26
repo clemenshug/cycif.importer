@@ -4,10 +4,10 @@
 \alias{apply_double_gates}
 \title{Apply double marker gates}
 \usage{
-apply_double_gates(data1, double_gates_df)
+apply_double_gates(data, double_gates_df)
 }
 \arguments{
-\item{data1}{Data frame with single marker gates}
+\item{data}{Data frame with single marker gates}
 
 \item{double_gates_df}{Data frame with marker1, marker2 columns for double gates}
 }
@@ -17,4 +17,3 @@ Data frame with double gates added
 \description{
 Apply double marker gates
 }
-\keyword{internal}

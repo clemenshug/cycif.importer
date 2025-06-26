@@ -1,194 +1,305 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
 # cycif.importer
 
 <!-- badges: start -->
+
 <!-- badges: end -->
 
-A comprehensive R package for analyzing CyCIF (Cyclic Immunofluorescence) multiplexed tissue imaging data. The package provides a modular three-stage pipeline for importing UNMICST cell segmentation data, applying gating thresholds, assigning regions of interest (ROIs), sampling cells, and generating summary statistics.
+The `cycif.importer` package provides functions to import CyCIF (Cyclic
+Immunofluorescence) multiplexed tissue imaging data ran through the
+[MCMICRO](https://mcmicro.org/) pipeline into R and perform basic ROI
+and marker gating.
+
+## Features
+
+- **Data Import**: Load UNMICST cell segmentation data and ROI
+  definitions
+- **Gating**: Apply single and double marker gating thresholds
+- **ROI Assignment**: Assign cells to regions of interest polygons
+- **Marker Combinations**: Phenotype cells using custom marker
+  combinations
+- **Sampling**: Subsample cells
+- **Summarization**: Generate stratified summaries with custom groupings
 
 ## Installation
 
-You can install the development version of cycif.importer from GitHub:
+You can install the development version of cycif.importer from
+[GitHub](https://github.com/clemenshug/cycif.importer) with:
 
 ``` r
-# Install devtools if you haven't already
-install.packages("devtools")
-
-# Install cycif.importer
-devtools::install_github("your-username/cycif.importer")
-```
-
-## Quick Start
-
-### Complete Pipeline
-
-```r
-library(cycif.importer)
-
-# Run the complete pipeline with default settings
-results <- run_complete_pipeline(
-  data_dir = "/path/to/unmicst/data",
-  roi_dir = "/path/to/roi/data",
-  gate_table_path = "/path/to/gates.csv",
-  output_dir = "/path/to/output"
-)
-```
-
-### Modular Approach
-
-```r
-# Stage 1: Import and Gate
-cell_data <- load_cell_data("/path/to/data")
-gated_data <- cycif_import_and_gate(cell_data)
-
-# Add marker combinations
-gated_data <- calculate_marker_combinations(gated_data, get_default_marker_combinations())
-
-# Stage 2: Sample
-sampled_data <- cycif_sample(gated_data, sample_size = 50000)
-
-# Stage 3: Summarize
-results <- cycif_summarize(sampled_data)
-
-# Save results
-save_cycif_results(results, "/path/to/output")
+# install.packages("remotes")
+remotes::install_github("clemenshug/cycif.importer")
 ```
 
 ## Pipeline Overview
 
-The package implements a three-stage analysis pipeline:
+The `cycif.importer` package implements a modular three-stage analysis
+pipeline:
 
 ### Stage 1: Import & Gate
-- Load UNMICST cell segmentation data
-- Standardize coordinate systems (pixel to micron conversion)
-- Assign cells to regions of interest (ROIs) using polygon coordinates
-- Apply single and double marker gating thresholds
-- Expand ROI boundaries to include nearby cells
+
+- Load cell quantification data from UNMICST output
+- Load ROI definitions
+- Apply single and double marker gates
+- Assign cells to ROIs with optional boundary expansion
 
 ### Stage 2: Sample
-- Sample cells according to specified strategy:
-  - `"all_cells"`: Sample from all cells
-  - `"roi_only"`: Sample only from ROI-assigned cells
+
+- Apply flexible sampling strategies
+- Support for all-cells or ROI-only sampling
 - Configurable sample sizes per slide
-- Combines data from multiple slides
 
 ### Stage 3: Summarize
-- Generate summary statistics by slide and ROI
-- Create stratified summaries based on cell populations
-- Add slide and ROI metadata
-- Support for custom filtering expressions
 
-## Key Features
+- Generate summary statistics with custom filters
+- Support for multiple grouping strategies
+- Export results as CSV files
 
-### Flexible Marker Combinations
-Define complex marker combinations using formula syntax:
+## Example with Built-in Data
 
-```r
-custom_combos <- list(
-  activated_cd8 = ~CD8ap & Ki67p,
-  exhausted_cd8 = ~CD8ap & PD1p & LAG3p,
-  ifn_positive = ~pSTAT1p | pSTAT3p | HLA_Ep
+The package includes example data from two tissue samples with
+pre-defined gates and ROIs:
+
+``` r
+library(cycif.importer)
+library(dplyr)
+
+# Set up paths to example data
+data_dir <- system.file("extdata/example_quants", package = "cycif.importer")
+roi_dir <- system.file("extdata/example_rois", package = "cycif.importer")
+gate_file <- system.file("extdata/example_gates.csv", package = "cycif.importer")
+output_dir <- tempdir()
+
+# Run the complete pipeline
+results <- cycif_pipeline(
+  data_dir = data_dir,
+  roi_dir = roi_dir,
+  gate_table_path = gate_file,
+  output_dir = output_dir,
+  summary_filters = list(
+    `PanCK+` = ~PanCKp,
+    `PanCK-` = ~!PanCKp,
+    `CD8+` = ~CD8ap,
+    `CD4+` = ~CD4p
+  ),
+  summary_groups = list(
+    by_roi = c("slideName", "ROI", "ROIname"),
+    by_slide = c("slideName"),
+    by_roi_type = c("slideName", "ROIname")
+  ),
+  sample_size = 25000,
+  sampling_mode = "all_cells",
+  expand_distance = 50  # Expand ROI boundaries by 50 microns
 )
-
-data_with_combos <- calculate_marker_combinations(gated_data, custom_combos)
 ```
 
-### ROI Management
-- Automatic cell assignment to polygonal ROIs
-- ROI boundary expansion for including nearby cells
-- Support for multiple ROI types per slide
+The `ouptput_dir` directory will contain the following files: -
+`sampled_cells.csv.gz`: Cells sampled from the dataset with gates and
+ROI assignments - Summaries for each of the defined filter and grouping
+combinations e.g. - `by_roi__PanCK+.csv.gz`: Summary statistics grouped
+by ROI including only PanCK+ cells - `by_slide__CD8+.csv.gz`: Summary
+statistics grouped by slide including only CD8+ cells
 
-### Scalable Processing
-- Handles large datasets through sampling strategies
-- Memory-efficient processing of multiple slides
-- Parallelizable design for high-throughput analysis
+    #>  [1] "sampled_cells.csv.gz"               "summary_by_roi__CD4+.csv.gz"       
+    #>  [3] "summary_by_roi__CD8+.csv.gz"        "summary_by_roi__PanCK-.csv.gz"     
+    #>  [5] "summary_by_roi__PanCK+.csv.gz"      "summary_by_roi_type__CD4+.csv.gz"  
+    #>  [7] "summary_by_roi_type__CD8+.csv.gz"   "summary_by_roi_type__PanCK-.csv.gz"
+    #>  [9] "summary_by_roi_type__PanCK+.csv.gz" "summary_by_slide__CD4+.csv.gz"     
+    #> [11] "summary_by_slide__CD8+.csv.gz"      "summary_by_slide__PanCK-.csv.gz"   
+    #> [13] "summary_by_slide__PanCK+.csv.gz"
 
-### Comprehensive Output
-- Cell-level data with all transformations
-- ROI-level summary statistics
-- Population-specific summaries
-- Metadata integration
+## Modular Usage
 
-## Data Requirements
+You can also use individual functions for more control:
 
-### Input File Formats
+``` r
+# Load data step by step
+cell_data <- cycif_load_cell_data(data_dir)
+roi_data <- cycif_load_roi_data(roi_dir, names(cell_data))
 
-**Cell Data**: `*--unmicst_cell.csv(.gz)`
-- Required columns: `CellID`, `X_centroid`, `Y_centroid`, marker columns
-- Marker columns should contain raw intensity values
+# Apply gates
+gates <- readr::read_csv(gate_file)
+gated_data <- cycif_apply_gates(cell_data, gates)
 
-**ROI Data**: `*-rois.csv` (optional)
-- Required columns: `all_points`
-- `all_points` format: "x1,y1 x2,y2 x3,y3 ..." (space-separated coordinate pairs)
-
-**Gate Thresholds**: CSV file (optional)
-- Columns: `slideName` + marker columns
-- Values should be log-transformed thresholds
-
-**Metadata**: CSV files (optional)
-- Slide metadata: must include `slideName` column
-- ROI metadata: must include `ROIname` column (to match with `Name` in ROI data)
-
-## Advanced Usage
-
-### Custom Sampling Strategies
-```r
-# Sample only from ROI cells
-sampled_roi <- cycif_sample(
+# Assign ROIs
+data_with_rois <- cycif_assign_rois(
   gated_data,
+  roi_data,
+  scale_factor = 0.65,
+  expand_distance = 50
+)
+
+# Sample cells
+sampled_data <- cycif_sample(
+  data_with_rois,
   sample_size = 10000,
   sampling_mode = "roi_only"
 )
-```
 
-### Custom Summary Filters
-```r
-custom_filters <- list(
-  "Epithelial" = ~PanCKp,
-  "CD8_T_cells" = ~CD8ap & !PanCKp,
-  "Activated_T" = ~(CD8ap | CD4p) & Ki67p
-)
-
-results <- cycif_summarize(sampled_data, summary_filters = custom_filters)
-```
-
-### ROI Expansion
-```r
-gated_data <- cycif_import_and_gate(
-  cell_data = cell_data,
-  roi_data = roi_data,
-  expand_distance = 100  # microns
+# Generate summaries
+summaries <- cycif_summarize(
+  sampled_data,
+  summary_filters = list(`CD8+` = ~CD8ap),
+  summary_groups = list(by_slide = "slideName")
 )
 ```
 
-## Package Structure
+## Data Formats
 
-The package is organized into logical modules:
+### Input Data Structure
 
-- **Pipeline functions**: Core three-stage pipeline (`R/pipeline.R`)
-- **Stage 1 helpers**: Data import and ROI assignment (`R/stage1_helpers.R`)
-- **Stage 3 helpers**: Summary statistics (`R/stage3_helpers.R`)
-- **Marker combinations**: Formula-based marker logic (`R/marker_combinations.R`)
-- **File I/O**: Data loading and saving (`R/file_io.R`)
-- **Complete pipeline**: High-level wrapper functions (`R/complete_pipeline.R`)
+The package expects specific input file formats. Here are examples using
+the built-in test data:
 
-## Documentation
+#### Cell Quantification Data (UNMICST Output)
 
-- Package documentation: `help(package = "cycif.importer")`
-- Function help: `?function_name`
-- Vignette: `vignette("cycif-analysis-pipeline", package = "cycif.importer")`
+**Directory Structure:** The cell quantification data directory should
+contain one `.csv` or `.csv.gz` file per slide:
 
-## Testing
+    data_dir/
+    ├── LSP11060--unmicst_cell.csv.gz
+    ├── LSP11064--unmicst_cell.csv.gz
+    └── LSP11065--unmicst_cell.csv
 
-Run the test suite:
+**File Naming Convention:** - Files should follow the pattern:
+`{slideName}--unmicst_cell.csv[.gz]` - The `slideName` portion (before
+`--unmicst_cell`) must match the `slideName` in your gate thresholds
+file - Compressed (`.gz`) files are automatically detected and handled
 
-```r
-devtools::test()
+Cell-level quantification files from UNMICST segmentation (`.csv` or
+`.csv.gz` format):
+
+| CellID | X_centroid | Y_centroid | Area |  PanCK |    CD8a |     CD4 |  FoxP3 |
+|-------:|-----------:|-----------:|-----:|-------:|--------:|--------:|-------:|
+| 117590 |   10665.23 |    7437.14 |  106 | 648.93 | 1055.87 | 1874.10 | 569.80 |
+| 135190 |   20959.12 |    6581.12 |  135 | 694.76 | 1152.69 | 2156.97 | 793.32 |
+| 288659 |    9708.67 |   13880.33 |   82 | 699.87 | 1254.49 | 2169.05 | 603.46 |
+
+Example Cell Quantification Data
+
+**Required columns:** - `CellID`: Unique cell identifier - `X_centroid`,
+`Y_centroid`: Cell center coordinates (pixels) - **Marker columns**:
+Quantified intensity values for each marker
+
+**Optional columns:** - `Area`: Cell area - `MajorAxisLength`,
+`MinorAxisLength`: Cell shape metrics - Additional morphological
+features
+
+#### Gate Thresholds File
+
+CSV file containing marker intensity thresholds for each slide:
+
+| slideName | PanCK | CD8a |  CD4 | FoxP3 | Ki67 |
+|:----------|------:|-----:|-----:|------:|-----:|
+| LSP11060  |  7.40 |  7.5 | 8.50 |  7.65 |  7.5 |
+| LSP11064  |  6.95 |  7.6 | 8.55 |  7.40 |  7.7 |
+
+Example Gate Thresholds (log2 transformed intensities)
+
+**Required columns:** - `slideName`: Must match slide names in cell data
+files - **Marker columns**: Log2-transformed intensity thresholds for
+each marker
+
+#### Region of Interest (ROI) Files
+
+**Directory Structure:** The ROI directory should contain one `.csv`
+file per slide with ROI definitions:
+
+    roi_dir/
+    ├── LSP11060-rois.csv
+    ├── LSP11064-rois.csv
+    └── LSP11065-rois.csv
+
+**File Naming Convention:** - Files should follow the pattern:
+`{slideName}-rois.csv` - The `slideName` portion (before `-rois`) must
+match the slide names in your cell quantification files - Each file
+contains all ROI polygons for that specific slide
+
+CSV files defining polygon regions for each slide:
+
+|    Id | Name                | Text                | type    |
+|------:|:--------------------|:--------------------|:--------|
+| 17690 | Incidental STIC     | Incidental STIC     | Polygon |
+| 17691 | Incidental Fimbriae | Incidental Fimbriae | Polygon |
+| 17693 | Incidental STIL     | Incidental STIL     | Polygon |
+
+Example ROI Definitions
+
+**Required columns:** - `Id`: Unique ROI identifier - `Name`: ROI
+name/identifier - `all_points`: Polygon coordinates as “x1,y1 x2,y2 …”
+string
+
+**Optional columns:** - `Text`: ROI description - Geometric properties
+(X, Y, Width, Height, etc.)
+
+#### Slide Metadata (Optional)
+
+CSV file with additional slide-level information:
+
+| slideName | patient_id | tissue_type    | treatment |
+|:----------|:-----------|:---------------|:----------|
+| LSP11060  | P001       | Ovary          | Control   |
+| LSP11064  | P002       | Fallopian tube | Treated   |
+
+Example Slide Metadata Structure
+
+**Required columns:** - `slideName`: Must match slide names in other
+files
+
+**Optional columns:** - Any additional slide-level annotations
+
+#### ROI Metadata (Optional)
+
+CSV file with additional ROI-level information:
+
+| ROIname             | region_type | pathologist_score |
+|:--------------------|:------------|------------------:|
+| Incidental STIC     | Lesion      |                 3 |
+| Incidental Fimbriae | Normal      |                 1 |
+| Incidental STIL     | Lesion      |                 2 |
+
+Example ROI Metadata Structure
+
+**Required columns:** - `ROIname`: Must match ROI names in ROI
+definition files
+
+**Optional columns:** - Any additional ROI-level annotations
+
+### Output Data
+
+- **Sampled Cells**: Cell-level data with gates, ROI assignments, and
+  metadata
+- **Summaries**: Aggregated statistics by user-defined groups and
+  filters
+
+## Customization
+
+The pipeline supports extensive customization:
+
+``` r
+# Custom marker combinations
+marker_combos <- list(
+  regulatory_T = ~CD4p & FoxP3p,
+  cytotoxic_T = ~CD8ap & GZMBp,
+  exhausted_T = ~CD8ap & PD1p
+)
+
+# Custom double gates
+double_gates <- data.frame(
+  marker1 = c("CD4", "CD8a"),
+  marker2 = c("FoxP3", "GZMB")
+)
+
+# Run with custom parameters
+results <- cycif_pipeline(
+  data_dir = data_dir,
+  roi_dir = roi_dir,
+  marker_combinations = marker_combos,
+  double_gates = double_gates,
+  scale_factor = 0.5,  # Different pixel-to-micron conversion
+  expand_distance = 100,  # Larger ROI expansion
+  output_dir = output_dir
+)
 ```
-
-## Contributing
-
-Please read our contribution guidelines and submit issues or pull requests on GitHub.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.

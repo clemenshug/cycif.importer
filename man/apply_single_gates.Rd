@@ -4,10 +4,10 @@
 \alias{apply_single_gates}
 \title{Apply single marker gates}
 \usage{
-apply_single_gates(data1, gate_thresholds, slide_name)
+apply_single_gates(data, gate_thresholds, slide_name)
 }
 \arguments{
-\item{data1}{Data frame with marker measurements}
+\item{data}{Data frame with marker measurements}
 
 \item{gate_thresholds}{Data frame with gating thresholds}
 
@@ -19,4 +19,3 @@ Data frame with gating results added as logical columns
 \description{
 Apply single marker gates
 }
-\keyword{internal}

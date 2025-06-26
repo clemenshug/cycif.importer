@@ -2,7 +2,7 @@
 #'
 #' Samples cells according to specified strategy and size.
 #'
-#' @param gated_data List of dataframes by slide, single dataframe with
+#' @param data List of dataframes by slide, single dataframe with
 #'   slideName
 #' @param sample_size Number of cells to sample per slide (NULL for no sampling)
 #' @param sampling_mode Either "all_cells" or "roi_only"
@@ -13,24 +13,24 @@
 #' @examples
 #' \dontrun{
 #' # Sample 10,000 cells from all cells
-#' sampled_data <- cycif_sample(gated_data, sample_size = 10000)
+#' sampled_data <- cycif_sample(data, sample_size = 10000)
 #'
 #' # Sample only from ROI cells
 #' sampled_data <- cycif_sample(
-#'   gated_data,
+#'   data,
 #'   sample_size = 5000,
 #'   sampling_mode = "roi_only"
 #' )
 #' }
 cycif_sample <- function(
-  gated_data,
+  data,
   sample_size = 50000,
   sampling_mode = "all_cells"
 ) {
   sampling_mode <- match.arg(sampling_mode, c("all_cells", "roi_only"))
 
   # Standardize input data
-  slide_list <- standardize_input_data(gated_data)
+  slide_list <- standardize_input_data(data)
   slide_names <- names(slide_list)
 
   sampled_slides <- list()

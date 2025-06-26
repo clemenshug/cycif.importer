@@ -16,10 +16,3 @@ magrittr::`%>%`
 #' @importFrom dplyr across any_of where left_join n distinct
 #' @importFrom rlang .data
 #' @importFrom stats complete.cases
-
-# Quiets concerns of R CMD check regarding non-standard evaluation
-utils::globalVariables(c("slideName", "ROI", "ROIname", "GroupCount",
-                         "Xt", "Yt", "CellID", "PanCKp", "CD8ap", "CD4p",
-                         "CD103p", "Ki67p", "PD1p", "LAG3p", "GZMBp",
-                         "pTBK1p", "pSTAT1p", "pSTAT3p", "HLA_Ep",
-                         "CD11cp", "HLADRp", "CD68p"))

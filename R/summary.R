@@ -1,6 +1,7 @@
 #' Summarize sampled data
 #'
-#' Generates summary statistics from sampled data with multiple grouping strategies.
+#' Generates summary statistics from cells using custom subsets
+#' and groups.
 #'
 #' @param data Single dataframe with sampled data, or a list of dataframes
 #' @param summary_filters Named list of formula expressions for creating
@@ -63,17 +64,21 @@ cycif_summarize <- function(
 
   results <- list()
   for (group_name in names(summary_groups)) {
-    for (summary_name in names(summary_filters)) {
+    for (filter_name in names(summary_filters)) {
+      if (filter_name %in% attr(data_with_filters, "missing_combinations")) {
+        warning(sprintf("Skipping group '%s' with filter '%s': missing columns (%s)", group_name, filter_name, paste(attr(data_with_filters, "missing_vars"), collapse = ", ")))
+        next
+      }
       group_vars <- summary_groups[[group_name]]
-      summary_name_sym <- rlang::ensym(summary_name)
+      filter_name_sym <- rlang::ensym(filter_name)
 
       res_slide <- data_with_filters %>%
-        purrr::map(\(x) dplyr::filter(x, !!summary_name_sym)) %>%
+        purrr::map(\(x) dplyr::filter(x, !!filter_name_sym)) %>%
         dplyr::bind_rows(.id = "slideName") %>%
         create_summary(group_vars = group_vars)
 
       # Store in results
-      results[[paste(group_name, summary_name, sep = "__")]] <- res_slide
+      results[[paste(group_name, filter_name, sep = "__")]] <- res_slide
     }
   }
 
@@ -95,9 +100,8 @@ create_summary <- function(data, group_vars) {
       cell_count = dplyr::n(),
       dplyr::across(
         dplyr::where(function(x) is.numeric(x) || is.logical(x)),
-        mean,
-        na.rm = TRUE,
-        .names = "mean_{.col}"
+        .fns = list(mean = \(x) mean(x, na.rm = TRUE)),
+        .names = "{.fn}_{.col}"
       ),
       .groups = "drop"
     )

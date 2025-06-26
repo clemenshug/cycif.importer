@@ -17,8 +17,8 @@ test_that("cycif_load_cell_data works with example data", {
 
   # Check data structure for first slide
   first_slide <- cell_data[[1]]
-  expect_s3_class(first_slide, "data.frame")
-  expect_true(nrow(first_slide) > 0)
+  expect_type(first_slide, "data.frame")
+  expect_equal(nrow(first_slide), 10000)
 
   # Check required columns
   required_cols <- c("CellID", "X_centroid", "Y_centroid")

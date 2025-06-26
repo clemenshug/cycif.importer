@@ -5,41 +5,48 @@
 \title{Summarize sampled data}
 \usage{
 cycif_summarize(
-  sampled_data,
-  slide_metadata = NULL,
-  roi_metadata = NULL,
-  summary_filters = list(`panCK+` = ~PanCKp, `panCK-` = ~!PanCKp)
+  data,
+  summary_filters = NULL,
+  summary_groups = list(by_roi = c("slideName", "ROI", "ROIname"))
 )
 }
 \arguments{
-\item{sampled_data}{Single dataframe with sampled data, or list/dataframe
-that will be standardized}
+\item{data}{Single dataframe with sampled data, or a list of dataframes}
 
 \item{summary_filters}{Named list of formula expressions for creating
-stratified summaries. Default creates PanCK+/- summaries.
-Example: \code{list("panCK+" = ~PanCKp, "panCK-" = ~!PanCKp)}
-Set to NULL to disable stratified summaries, or provide custom filters.}
+stratified summaries. Set to NULL to disable.
+Example: \code{list("CD8+" = ~CD8ap, "CD4+" = ~CD4p)}}
+
+\item{summary_groups}{Named list of character vectors defining different grouping strategies.
+Each element represents a different summary grouping.
+Default: \code{list("by_roi" = c("slideName", "ROI", "ROIname"))}}
 }
 \value{
-List with summary statistics including:
-\itemize{
-\item \code{roi_summaries}: Overall summary by slide and ROI
-\item \code{sampled_cells}: The input sampled data
-\item \code{stratified_summaries}: Named list of filtered summaries
-}
+Flat named list with summary dataframes for each grouping strategy and filter combination
 }
 \description{
-Generates summary statistics from sampled data.
+Generates summary statistics from cells using custom subsets
+and groups.
 }
 \examples{
 \dontrun{
-# Basic summarization
-results <- cycif_summarize(sampled_data)
-
-# With custom filters and metadata
+# Basic summarization with multiple grouping strategies
 results <- cycif_summarize(
-  sampled_data,
-  summary_filters = list("CD8+" = ~CD8ap, "CD4+" = ~CD4p)
+  data,
+  summary_groups = list(
+    "by_roi" = c("slideName", "ROI", "ROIname"),
+    "by_slide" = c("slideName")
+  )
+)
+
+# With stratified summaries
+results <- cycif_summarize(
+  data,
+  summary_filters = list("CD8+" = ~CD8ap, "CD4+" = ~CD4p),
+  summary_groups = list(
+    "by_roi" = c("slideName", "ROI", "ROIname"),
+    "by_slide" = c("slideName")
+  )
 )
 }
 }

@@ -4,10 +4,10 @@
 \alias{cycif_apply_gates}
 \title{Apply gates to processed cell data}
 \usage{
-cycif_apply_gates(processed_data, gate_thresholds = NULL, double_gates = NULL)
+cycif_apply_gates(data, gate_thresholds = NULL, double_gates = NULL)
 }
 \arguments{
-\item{processed_data}{List of dataframes by slide name (output from
+\item{data}{List of dataframes by slide name (output from
 cycif_import_and_assign_rois)}
 
 \item{gate_thresholds}{Data frame with gating thresholds by slide and marker
@@ -27,7 +27,7 @@ Returns gated data as list of dataframes by slide.
 \dontrun{
 # Apply gates to processed data
 gated_data <- cycif_apply_gates(
-  processed_data = processed_data,
+  data = data,
   gate_thresholds = my_gates
 )
 }

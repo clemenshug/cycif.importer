@@ -4,12 +4,12 @@
 \alias{standardize_coordinates}
 \title{Standardize coordinate columns and convert to microns}
 \usage{
-standardize_coordinates(data1, scale_factor)
+standardize_coordinates(data, scale_factor)
 }
 \arguments{
-\item{data1}{Data frame with cell measurements}
-
 \item{scale_factor}{Scale factor for converting pixels to microns}
+
+\item{data1}{Data frame with cell measurements}
 }
 \value{
 Data frame with standardized coordinate columns

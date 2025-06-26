@@ -23,37 +23,36 @@ test_that("complete pipeline works with example data", {
     roi_dir = roi_dir,
     gate_table_path = gate_file,
     output_dir = output_dir,
-    sample_size = 1000,  # Small sample for testing
-    sampling_mode = "all_cells"
+    sample_size = 1000,
+    sampling_mode = "all_cells",
+
   )
 
-  # Test structure of results
   expect_type(results, "list")
-  expect_true("all_cells" %in% names(results))
-  expect_true("sampled_data" %in% names(results))
-  expect_true("by_roi" %in% names(results))
-  expect_true("by_slide" %in% names(results))
-  expect_true("by_roi_type" %in% names(results))
+  expect_contains(
+    names(results),
+    c(
+      "all_cells", "sampled_cells",
+      "by_roi__panCK+", "by_slide__panCK+", "by_roi_type__panCK+"
+    )
+  )
 
   # Test all_cells data
   expect_type(results$all_cells, "list")
-  expect_true(length(results$all_cells) > 0)
-
-  # Check that slides are present
   slides <- names(results$all_cells)
-  expect_true(length(slides) >= 2)  # Should have LSP11060 and LSP11064
+  expect_setequals(slides, c("LSP11060", "LSP11064"))  # Should have LSP11060 and LSP11064
 
   # Test first slide data structure
   first_slide <- results$all_cells[[1]]
-  expect_s3_class(first_slide, "data.frame")
+  expect_type(first_slide, "data.frame")
 
   # Check required columns exist
   required_cols <- c("CellID", "X_centroid", "Y_centroid", "slideName", "ROI", "ROIname")
-  expect_true(all(required_cols %in% names(first_slide)))
+  expect_contains(names(first_slide), required_cols)
 
   # Check that gating columns were added (should have 'p' suffix for positive gates)
   gate_cols <- grep("p$", names(first_slide), value = TRUE)
-  expect_true(length(gate_cols) > 0)
+  expect_length(gate_cols, 31)
 
   # Test sampled data
   expect_s3_class(results$sampled_data, "data.frame")
@@ -106,12 +105,15 @@ test_that("pipeline works without gates", {
   roi_dir <- file.path(extdata_path, "example_rois")
   output_dir <- tempdir()
 
-  results <- cycif_pipeline(
-    data_dir = data_dir,
-    roi_dir = roi_dir,
-    gate_table_path = NULL,  # No gates
-    output_dir = output_dir,
-    sample_size = 500
+  expect_warning(
+    results <- cycif_pipeline(
+      data_dir = data_dir,
+      roi_dir = roi_dir,
+      gate_table_path = NULL,  # No gates
+      output_dir = output_dir,
+      sample_size = 500
+    ),
+    "Skipping group '.+' with filter 'panCK[-+]': missing columns (PanCKp)"
   )
 
   expect_type(results, "list")

@@ -54,7 +54,7 @@ cycif_pipeline <- function(
   slide_info_path = NULL,
   roi_info_path = NULL,
   output_dir,
-  summary_filters = list(`panCK+` = ~PanCKp, `panCK-` = ~!PanCKp),
+  summary_filters = list(`PanCK+` = ~PanCKp, `PanCK-` = ~!PanCKp),
   summary_groups = list(
     by_roi = c("slideName", "ROI", "ROIname"),
     by_slide = c("slideName"),
@@ -150,16 +150,18 @@ cycif_pipeline <- function(
   sampled_with_meta <- sampled_data
   if (!is.null(slide_metadata)) {
     message("Adding slide metadata...")
-    sampled_with_meta <- cycif_add_slide_metadata(
-      sampled_data,
-      slide_metadata
+    sampled_with_meta <- dplyr::left_join(
+      sampled_with_meta,
+      slide_metadata,
+      by = "slideName"
     )
   }
   if (!is.null(roi_metadata)) {
     message("Adding ROI metadata...")
-    sampled_with_meta <- cycif_add_roi_metadata(
+    sampled_with_meta <- dplyr::left_join(
       sampled_with_meta,
-      roi_metadata
+      roi_metadata,
+      by = "ROIname"
     )
   }
 
@@ -170,14 +172,26 @@ cycif_pipeline <- function(
     summary_groups = summary_groups
   )
 
-  # Save results
-  # cycif_save_results(final_result, output_dir)
+  message("Saving results...")
+  readr::write_csv(
+    sampled_with_meta,
+    file.path(output_dir, "sampled_cells.csv.gz")
+  )
+  purrr::iwalk(
+    summarized_data,
+    \(x, n) {
+      readr::write_csv(
+        sampled_with_meta,
+        file.path(output_dir, paste0("summary_", n, ".csv.gz"))
+      )
+    }
+  )
 
   message("Pipeline complete!")
   return(
     list(
       all_cells = gated_data,
-      sampled_data = sampled_with_meta
+      sampled_cells = sampled_with_meta
     ) %>%
      c(summarized_data)
   )
