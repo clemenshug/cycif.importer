@@ -65,8 +65,8 @@ cycif_apply_gates <- function(
 #' @export
 apply_single_gates <- function(data, gate_thresholds, slide_name) {
   # Find gate thresholds for this slide
-  slide_gates <- gate_thresholds %>%
-    dplyr::filter(slideName == slide_name)
+  slide_gates <- gate_thresholds |>
+    filter(slideName == slide_name)
 
   if (nrow(slide_gates) == 0) {
     message(sprintf("  No gate thresholds found for %s", slide_name))
@@ -204,8 +204,8 @@ cycif_marker_combinations <- function(data, marker_combinations) {
 
     # Add new columns to data
     if (length(new_columns) > 0) {
-      data1 <- data1 %>%
-        dplyr::mutate(!!!new_columns)
+      data1 <- data1 |>
+        mutate(!!!new_columns)
     }
 
     return(data1)

@@ -90,7 +90,7 @@ cycif_load_roi_data <- function(roi_dir, slide_names = NULL) {
   }
 
   if (length(roi_data) > 0) {
-    return(dplyr::bind_rows(roi_data))
+    return(bind_rows(roi_data))
   } else {
     return(NULL)
   }

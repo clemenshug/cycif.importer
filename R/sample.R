@@ -43,7 +43,7 @@ cycif_sample <- function(
     if (sampling_mode == "all_cells") {
       sampling_pool <- data1
     } else { # roi_only
-      sampling_pool <- data1 %>% dplyr::filter(ROIname != "none")
+      sampling_pool <- data1 |> filter(ROIname != "none")
       if (nrow(sampling_pool) == 0) {
         message(sprintf("  No ROI cells found for %s", slide_name))
         next
@@ -69,7 +69,7 @@ cycif_sample <- function(
 
   # Combine all sampled data
   if (length(sampled_slides) > 0) {
-    all_sampled <- dplyr::bind_rows(sampled_slides)
+    all_sampled <- bind_rows(sampled_slides)
   } else {
     all_sampled <- NULL
   }

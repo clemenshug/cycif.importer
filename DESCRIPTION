@@ -1,6 +1,6 @@
 Package: cycif.importer
 Title: CyCIF Analysis Pipeline for Multiplexed Tissue Imaging Data
-Version: 0.1.0
+Version: 0.1.1
 Authors@R:
     person("CyCIF", "Team", , "cycif@example.com", role = c("aut", "cre"))
 Description: A comprehensive toolkit for analyzing CyCIF (Cyclic Immunofluorescence)
@@ -12,6 +12,8 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.1.0)
 Imports:
     dplyr,
     readr,
@@ -21,7 +23,7 @@ Imports:
     qs,
     rlang,
     purrr,
-    magrittr
+    data.table
 Suggests:
     testthat (>= 3.0.0),
     knitr,

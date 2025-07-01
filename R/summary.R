@@ -72,9 +72,9 @@ cycif_summarize <- function(
       group_vars <- summary_groups[[group_name]]
       filter_name_sym <- rlang::ensym(filter_name)
 
-      res_slide <- data_with_filters %>%
-        purrr::map(\(x) dplyr::filter(x, !!filter_name_sym)) %>%
-        dplyr::bind_rows(.id = "slideName") %>%
+      res_slide <- data_with_filters |>
+        purrr::map(\(x) filter(x, !!filter_name_sym)) |>
+        bind_rows(.id = "slideName") |>
         create_summary(group_vars = group_vars)
 
       # Store in results
@@ -94,12 +94,12 @@ cycif_summarize <- function(
 create_summary <- function(data, group_vars) {
   group_syms <- rlang::syms(group_vars)
 
-  data %>%
-    dplyr::group_by(!!!group_syms) %>%
-    dplyr::summarize(
-      cell_count = dplyr::n(),
-      dplyr::across(
-        dplyr::where(function(x) is.numeric(x) || is.logical(x)),
+  data |>
+    group_by(!!!group_syms) |>
+    summarize(
+      cell_count = n(),
+      across(
+        where(function(x) is.numeric(x) || is.logical(x)),
         .fns = list(mean = \(x) mean(x, na.rm = TRUE)),
         .names = "{.fn}_{.col}"
       ),

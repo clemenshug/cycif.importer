@@ -78,8 +78,13 @@ add_slide_metadata <- function(summary_data, slide_metadata) {
   validate_cell_data_structure(summary_data, "slideName")
   validate_cell_data_structure(slide_metadata, "slideName")
 
-  summary_data %>%
-    dplyr::left_join(slide_metadata, by = "slideName")
+  # Ensure that slideName is unique in slide_metadata
+  if (any(duplicated(slide_metadata$slideName))) {
+    stop("`slide_metadata` containst duplicate slide names. Please ensure each slideName is unique.")
+  }
+
+  summary_data |>
+    left_join(slide_metadata, by = "slideName")
 }
 
 #' Add ROI metadata to summary
@@ -93,8 +98,13 @@ add_roi_metadata <- function(summary_data, roi_metadata) {
   validate_cell_data_structure(summary_data, "ROIname")
   validate_cell_data_structure(roi_metadata, "ROIname")
 
-  summary_data %>%
-    dplyr::left_join(roi_metadata, by = "ROIname")
+  # Ensure that ROIname is unique in roi_metadata
+  if (any(duplicated(roi_metadata$ROIname))) {
+    stop("`roi_metadata` contains duplicate ROInames. Please ensure each ROIname is unique.")
+  }
+
+  summary_data |>
+    left_join(roi_metadata, by = "ROIname")
 }
 
 #' Convert logical columns to numeric (for saving)
@@ -104,5 +114,5 @@ add_roi_metadata <- function(summary_data, roi_metadata) {
 #' @return Data frame with logical columns converted to numeric
 #' @keywords internal
 convert_logical_to_numeric <- function(df) {
-  dplyr::mutate(df, dplyr::across(dplyr::where(is.logical), as.numeric))
+  mutate(df, across(where(is.logical), as.numeric))
 }

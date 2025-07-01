@@ -37,8 +37,8 @@ test_that("metadata addition works correctly", {
   expect_true("tissue_type" %in% names(with_roi_meta))
 
   # Test both together
-  with_both_meta <- test_data %>%
-    add_slide_metadata(slide_metadata) %>%
+  with_both_meta <- test_data |>
+    add_slide_metadata(slide_metadata) |>
     add_roi_metadata(roi_metadata)
 
   expect_s3_class(with_both_meta, "data.frame")

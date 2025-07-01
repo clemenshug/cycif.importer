@@ -150,7 +150,7 @@ cycif_pipeline <- function(
   sampled_with_meta <- sampled_data
   if (!is.null(slide_metadata)) {
     message("Adding slide metadata...")
-    sampled_with_meta <- dplyr::left_join(
+    sampled_with_meta <- left_join(
       sampled_with_meta,
       slide_metadata,
       by = "slideName"
@@ -158,7 +158,7 @@ cycif_pipeline <- function(
   }
   if (!is.null(roi_metadata)) {
     message("Adding ROI metadata...")
-    sampled_with_meta <- dplyr::left_join(
+    sampled_with_meta <- left_join(
       sampled_with_meta,
       roi_metadata,
       by = "ROIname"
@@ -181,7 +181,7 @@ cycif_pipeline <- function(
     summarized_data,
     \(x, n) {
       readr::write_csv(
-        sampled_with_meta,
+        x,
         file.path(output_dir, paste0("summary_", n, ".csv.gz"))
       )
     }
@@ -192,7 +192,7 @@ cycif_pipeline <- function(
     list(
       all_cells = gated_data,
       sampled_cells = sampled_with_meta
-    ) %>%
+    ) |>
      c(summarized_data)
   )
 }

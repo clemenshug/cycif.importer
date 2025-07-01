@@ -76,10 +76,10 @@ standardize_coordinates <- function(data, scale_factor) {
   names(data) <- stringr::str_replace(names(data), "Y_centroid", "Yt")
 
   # Convert coordinates from pixels to microns
-  data <- data %>%
-    dplyr::mutate(
-      dplyr::across(
-        dplyr::any_of(c("Xt", "Yt")),
+  data <- data |>
+    mutate(
+      across(
+        any_of(c("Xt", "Yt")),
         \(x) x * scale_factor
       )
     )
@@ -184,16 +184,16 @@ assign_single_roi <- function(data1, roi_points_str, roi_name, roi_id, scale_fac
 #' @return Data frame with expanded ROI assignments
 #' @keywords internal
 expand_roi_boundaries <- function(data1, expand_distance) {
-  roi_cells <- data1 %>% dplyr::filter(ROI != 0)
+  roi_cells <- data1 |> filter(ROI != 0)
 
   if (nrow(roi_cells) == 0 || expand_distance <= 0) {
     return(data1)
   }
 
   # Get unique ROI information
-  unique_rois <- data1 %>%
-    dplyr::filter(ROI != 0) %>%
-    dplyr::distinct(ROI, ROIname)
+  unique_rois <- data1 |>
+    filter(ROI != 0) |>
+    distinct(ROI, ROIname)
 
   # Store original assignments
   data1$ROI_original <- data1$ROI
@@ -207,14 +207,14 @@ expand_roi_boundaries <- function(data1, expand_distance) {
     message(sprintf("    Expanding ROI %d (%s) by %d microns", current_roi, current_roi_name, expand_distance))
 
     # Get cells in current ROI
-    roi_coords <- data1 %>%
-      dplyr::filter(ROI == current_roi) %>%
-      dplyr::select(Xt, Yt, CellID)
+    roi_coords <- data1 |>
+      filter(ROI == current_roi) |>
+      select(Xt, Yt, CellID)
 
     # Get cells not in any ROI
-    unassigned_coords <- data1 %>%
-      dplyr::filter(ROI == 0) %>%
-      dplyr::select(Xt, Yt, CellID)
+    unassigned_coords <- data1 |>
+      filter(ROI == 0) |>
+      select(Xt, Yt, CellID)
 
     if (nrow(roi_coords) == 0 || nrow(unassigned_coords) == 0) {
       next
