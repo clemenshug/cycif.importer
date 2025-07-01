@@ -1,8 +1,8 @@
 Package: cycif.importer
 Title: CyCIF Analysis Pipeline for Multiplexed Tissue Imaging Data
-Version: 0.1.1
+Version: 0.1.2
 Authors@R:
-    person("CyCIF", "Team", , "cycif@example.com", role = c("aut", "cre"))
+    person("Clemens", "Hug", , "clemens.hug@gmail.com", role = c("aut", "cre"))
 Description: A comprehensive toolkit for analyzing CyCIF (Cyclic Immunofluorescence)
     multiplexed tissue imaging data. Provides functions for importing UNMICST cell
     segmentation data, applying gating thresholds, assigning regions of interest (ROIs),
@@ -23,7 +23,7 @@ Imports:
     qs,
     rlang,
     purrr,
-    data.table
+    powerjoin
 Suggests:
     testthat (>= 3.0.0),
     knitr,

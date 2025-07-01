@@ -4,10 +4,10 @@
 \alias{add_slide_metadata}
 \title{Add slide metadata to summary}
 \usage{
-add_slide_metadata(summary_data, slide_metadata)
+add_slide_metadata(data, slide_metadata)
 }
 \arguments{
-\item{summary_data}{Data frame with summary statistics}
+\item{data}{Data frame with with \code{SlideName} column}
 
 \item{slide_metadata}{Data frame with slide metadata}
 }

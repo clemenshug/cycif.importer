@@ -147,34 +147,45 @@ cycif_pipeline <- function(
     sampling_mode = sampling_mode
   )
 
-  sampled_with_meta <- sampled_data
-  if (!is.null(slide_metadata)) {
-    message("Adding slide metadata...")
-    sampled_with_meta <- left_join(
-      sampled_with_meta,
-      slide_metadata,
-      by = "slideName"
-    )
+  # Show warnings once, then silently
+  add_slide_metadata_silently <- \(...) {
+    purrr::quietly(add_slide_metadata)(...)[["result"]]
   }
-  if (!is.null(roi_metadata)) {
-    message("Adding ROI metadata...")
-    sampled_with_meta <- left_join(
-      sampled_with_meta,
-      roi_metadata,
-      by = "ROIname"
-    )
+  add_roi_metadata_silently <- \(...) {
+    purrr::quietly(add_roi_metadata)(...)[["result"]]
   }
+  sampled_data <- add_slide_metadata(
+    sampled_data,
+    slide_metadata
+  )
+
+  sampled_data <- add_roi_metadata(
+    sampled_data,
+    roi_metadata
+  )
 
   message("Summarizing results...")
   summarized_data <- cycif_summarize(
-    sampled_with_meta,
+    sampled_data,
     summary_filters = summary_filters,
     summary_groups = summary_groups
+  )
+  summarized_data <- purrr::map(
+    summarized_data,
+    \(x) {
+      if ("slideName" %in% names(x)) {
+        x <- add_slide_metadata_silently(x, slide_metadata)
+      }
+      if ("ROIname" %in% names(x)) {
+        x <- add_roi_metadata_silently(x, roi_metadata)
+      }
+      x
+    }
   )
 
   message("Saving results...")
   readr::write_csv(
-    sampled_with_meta,
+    sampled_data,
     file.path(output_dir, "sampled_cells.csv.gz")
   )
   purrr::iwalk(
@@ -187,11 +198,20 @@ cycif_pipeline <- function(
     }
   )
 
+  gated_data <- purrr::map(
+    gated_data,
+    \(x) {
+      x <- add_slide_metadata_silently(x, slide_metadata)
+      x <- add_roi_metadata_silently(x, roi_metadata)
+      x
+    }
+  )
+
   message("Pipeline complete!")
   return(
     list(
       all_cells = gated_data,
-      sampled_cells = sampled_with_meta
+      sampled_cells = sampled_data
     ) |>
      c(summarized_data)
   )

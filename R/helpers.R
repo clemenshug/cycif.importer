@@ -69,42 +69,73 @@ standardize_input_data <- function(data) {
 
 #' Add slide metadata to summary
 #'
-#' @param summary_data Data frame with summary statistics
+#' @param data Data frame with with `SlideName` column
 #' @param slide_metadata Data frame with slide metadata
 #'
 #' @return Data frame with metadata joined
 #' @export
-add_slide_metadata <- function(summary_data, slide_metadata) {
-  validate_cell_data_structure(summary_data, "slideName")
+add_slide_metadata <- function(data, slide_metadata) {
+  if (is.null(slide_metadata) || nrow(slide_metadata) == 0) {
+    message("No slide metadata provided, returning data unchanged.")
+    return(data)
+  }
+  validate_cell_data_structure(data, "slideName")
   validate_cell_data_structure(slide_metadata, "slideName")
 
   # Ensure that slideName is unique in slide_metadata
-  if (any(duplicated(slide_metadata$slideName))) {
-    stop("`slide_metadata` containst duplicate slide names. Please ensure each slideName is unique.")
+  if (anyDuplicated(slide_metadata$slideName) > 0) {
+    stop(
+      "`slide_metadata` contains duplicate slide names. Please ensure each slideName is unique. ",
+      printf(
+        "Duplicate slide names: %s",
+        paste(unique(slide_metadata$slideName[duplicated(slide_metadata$slideName)]), collapse = ", ")
+      )
+    )
   }
 
-  summary_data |>
-    left_join(slide_metadata, by = "slideName")
+  powerjoin::power_left_join(
+    data,
+    slide_metadata,
+    by = "slideName",
+    check = powerjoin::check_specs(
+      unmatched_keys_left = "warn"
+    )
+  )
 }
 
 #' Add ROI metadata to summary
 #'
-#' @param summary_data Data frame with summary statistics
+#' @param data Data frame with with `SlideName` column
 #' @param roi_metadata Data frame with ROI metadata
 #'
 #' @return Data frame with metadata joined
 #' @export
-add_roi_metadata <- function(summary_data, roi_metadata) {
-  validate_cell_data_structure(summary_data, "ROIname")
+add_roi_metadata <- function(data, roi_metadata) {
+  if (is.null(roi_metadata) || nrow(roi_metadata) == 0) {
+    message("No ROI metadata provided, returning data.")
+    return(data)
+  }
+  validate_cell_data_structure(data, "ROIname")
   validate_cell_data_structure(roi_metadata, "ROIname")
 
   # Ensure that ROIname is unique in roi_metadata
-  if (any(duplicated(roi_metadata$ROIname))) {
-    stop("`roi_metadata` contains duplicate ROInames. Please ensure each ROIname is unique.")
+  if (anyDuplicated(roi_metadata$ROIname) > 0) {
+    stop(
+      "`roi_metadata` contains duplicate ROInames. Please ensure each ROIname is unique. ",
+      sprintf("Duplicate ROInames: %s",
+        paste(unique(roi_metadata$ROIname[duplicated(roi_metadata$ROIname)]), collapse = ", ")
+      )
+    )
   }
 
-  summary_data |>
-    left_join(roi_metadata, by = "ROIname")
+  powerjoin::power_left_join(
+    data,
+    roi_metadata,
+    by = "ROIname",
+    check = powerjoin::check_specs(
+      unmatched_keys_left = "warn"
+    )
+  )
 }
 
 #' Convert logical columns to numeric (for saving)

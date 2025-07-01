@@ -4,10 +4,10 @@
 \alias{add_roi_metadata}
 \title{Add ROI metadata to summary}
 \usage{
-add_roi_metadata(summary_data, roi_metadata)
+add_roi_metadata(data, roi_metadata)
 }
 \arguments{
-\item{summary_data}{Data frame with summary statistics}
+\item{data}{Data frame with with \code{SlideName} column}
 
 \item{roi_metadata}{Data frame with ROI metadata}
 }
