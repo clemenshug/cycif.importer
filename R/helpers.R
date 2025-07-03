@@ -86,7 +86,7 @@ add_slide_metadata <- function(data, slide_metadata) {
   if (anyDuplicated(slide_metadata$slideName) > 0) {
     stop(
       "`slide_metadata` contains duplicate slide names. Please ensure each slideName is unique. ",
-      printf(
+      sprintf(
         "Duplicate slide names: %s",
         paste(unique(slide_metadata$slideName[duplicated(slide_metadata$slideName)]), collapse = ", ")
       )

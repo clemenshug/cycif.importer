@@ -87,21 +87,23 @@ standardize_coordinates <- function(data, scale_factor) {
   return(data)
 }
 
+REQUIRED_ROI_VALS <- c("all_points", "Name", "type")
+
 #' Assign ROIs to cells based on polygon coordinates
 #'
-#' @param data1 Data frame with cell coordinates
+#' @param data Data frame with cell coordinates
 #' @param roi_data Data frame with ROI polygon definitions
 #' @param scale_factor Scale factor for coordinate conversion
 #'
 #' @return Data frame with ROI assignments added
 #' @keywords internal
-assign_rois_to_cells <- function(data1, roi_data, scale_factor) {
+assign_rois_to_cells <- function(data, roi_data, scale_factor) {
   # Initialize ROI columns
-  data1$ROI <- 0
-  data1$ROIname <- "none"
+  data$ROI <- 0
+  data$ROIname <- "none"
 
   if (is.null(roi_data) || nrow(roi_data) == 0) {
-    return(data1)
+    return(data)
   }
 
   message(sprintf("  Processing %d ROIs", nrow(roi_data)))
@@ -110,53 +112,84 @@ assign_rois_to_cells <- function(data1, roi_data, scale_factor) {
   for (i in seq_len(nrow(roi_data))) {
     r <- roi_data[i,]
 
-    if (is.na(r$all_points) || is.null(r$all_points) || is.na(r$Name) || is.null(r$Name)) {
-      warning(sprintf("  Skipping ROI %d: missing points or name", i))
-      next
-    }
-
-    if (!is.null(r$type) && r$type != "Polygon") {
-      warning(sprintf("  Skipping ROI %d (%s): unsupported type '%s'", i, r$Name, r$type))
+    # Check required columns
+    missing_vals <- purrr::map_lgl(
+      REQUIRED_ROI_VALS,
+      \(x) is.null(r[[x]]) || is.na(r[[x]]) || r[[x]] == ""
+    )
+    if (sum(missing_vals) > 0) {
+      warning(
+        sprintf(
+          "  Skipping ROI %d (%s): missing required values: %s",
+          i, r$Name, paste(REQUIRED_ROI_VALS[missing_vals], collapse = ", ")
+        )
+      )
       next
     }
 
     # Parse and assign ROI
-    cells_assigned <- assign_single_roi(data1, r$all_points, r$Name, i, scale_factor)
-    data1$ROI[cells_assigned] <- i
-    data1$ROIname[cells_assigned] <- r$Name
+    cells_assigned <- assign_single_roi(data, r$all_points, r$type, r$Name, i, scale_factor)
+    if (is.null(cells_assigned)) {
+      # Warning already issued in assign_single_roi
+      next
+    }
+    data$ROI[cells_assigned] <- i
+    data$ROIname[cells_assigned] <- r$Name
     message(sprintf("    ROI %d (%s): %d cells assigned", i, r$Name, sum(cells_assigned)))
   }
 
-  return(data1)
+  return(data)
+}
+
+#' Parse ROI points from string format
+#'
+#' @param roi_points_str String with ROI points in the format "x1,y1 x2,y2 ..."
+#'
+#' @return Matrix with parsed points (x, y)
+#' @keywords internal
+parse_point_str <- function(roi_points_str) {
+    point_pairs <- stringr::str_split_1(roi_points_str, " ")
+  points_matrix <- matrix(NA, nrow = length(point_pairs), ncol = 2)
+
+  for (i in seq_along(point_pairs)) {
+    coords <- as.numeric(stringr::str_split_1(point_pairs[i], ","))
+    if (length(coords) == 2) {
+      points_matrix[i, ] <- coords
+    } else {
+      warning(sprintf("Invalid point format '%s'. Using ROI without this point.", point_pairs[i]))
+    }
+  }
+
+  # Remove any rows with NA values
+  points_matrix[complete.cases(points_matrix), , drop = FALSE]
 }
 
 #' Assign a single ROI to cells
 #'
-#' @param data1 Data frame with cell coordinates
+#' @param data Data frame with cell coordinates
 #' @param roi_points_str String with polygon points "x1,y1 x2,y2 x3,y3 ..."
+#' @param roi_type Type of ROI ("Polyline", "Polygon", "Rectangle")
 #' @param roi_name Name of the ROI
 #' @param roi_id Numeric ID of the ROI
 #' @param scale_factor Scale factor for coordinate conversion
 #'
 #' @return Logical vector indicating which cells are in the ROI
 #' @keywords internal
-assign_single_roi <- function(data1, roi_points_str, roi_name, roi_id, scale_factor) {
-  # Parse polygon points from string format "x1,y1 x2,y2 x3,y3 ..."
-  point_pairs <- strsplit(roi_points_str, " ")[[1]]
-  points_matrix <- matrix(NA, nrow = length(point_pairs), ncol = 2)
-
-  for (i in seq_along(point_pairs)) {
-    coords <- as.numeric(strsplit(point_pairs[i], ",")[[1]])
-    if (length(coords) == 2) {
-      points_matrix[i, ] <- coords
-    }
-  }
-
+assign_single_roi <- function(data, roi_points_str, roi_type, roi_name, roi_id, scale_factor) {
   # Remove any rows with NA values
-  points_matrix <- points_matrix[complete.cases(points_matrix), , drop = FALSE]
+  points_matrix <- parse_point_str(roi_points_str)
 
-  if (nrow(points_matrix) < 3) {
-    return(rep(FALSE, nrow(data1)))
+  if (roi_type %in% c("Polyline", "Polygon") && nrow(points_matrix) < 3) {
+    warning(sprintf("  ROI %d (%s): not enough points to form a polygon. Skipping ROI.", roi_id, roi_name))
+    return(NULL)
+  }
+  if (roi_type == "Rectangle" && nrow(points_matrix) != 4) {
+    warning(sprintf("  ROI %d (%s): Rectangle doesn't consist of 4 points. Skipping ROI.", roi_id, roi_name))
+    return(NULL)
+  }
+  if (!roi_type %in% c("Polygon", "Polyline", "Rectangle")) {
+    warning(sprintf("  ROI %d (%s): Unsupported type '%s'. Skipping ROI.", roi_id, roi_name, roi_type))
+    return(NULL)
   }
 
   # Apply scale factor (convert from pixels to microns)
@@ -164,8 +197,8 @@ assign_single_roi <- function(data1, roi_points_str, roi_name, roi_id, scale_fac
 
   # Test which cells are inside this ROI
   inside_flags <- sp::point.in.polygon(
-    point.x = data1$Xt,
-    point.y = data1$Yt,
+    point.x = data$Xt,
+    point.y = data$Yt,
     pol.x = points_matrix[, 1],
     pol.y = points_matrix[, 2]
   )

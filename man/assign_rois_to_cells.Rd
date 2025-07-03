@@ -4,10 +4,10 @@
 \alias{assign_rois_to_cells}
 \title{Assign ROIs to cells based on polygon coordinates}
 \usage{
-assign_rois_to_cells(data1, roi_data, scale_factor)
+assign_rois_to_cells(data, roi_data, scale_factor)
 }
 \arguments{
-\item{data1}{Data frame with cell coordinates}
+\item{data}{Data frame with cell coordinates}
 
 \item{roi_data}{Data frame with ROI polygon definitions}
 

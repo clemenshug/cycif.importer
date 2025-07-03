@@ -4,12 +4,21 @@
 \alias{assign_single_roi}
 \title{Assign a single ROI to cells}
 \usage{
-assign_single_roi(data1, roi_points_str, roi_name, roi_id, scale_factor)
+assign_single_roi(
+  data,
+  roi_points_str,
+  roi_type,
+  roi_name,
+  roi_id,
+  scale_factor
+)
 }
 \arguments{
-\item{data1}{Data frame with cell coordinates}
+\item{data}{Data frame with cell coordinates}
 
 \item{roi_points_str}{String with polygon points "x1,y1 x2,y2 x3,y3 ..."}
+
+\item{roi_type}{Type of ROI ("Polyline", "Polygon", "Rectangle")}
 
 \item{roi_name}{Name of the ROI}
 
