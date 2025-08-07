@@ -9,7 +9,7 @@ assign_rois_to_cells(data, roi_data, scale_factor)
 \arguments{
 \item{data}{Data frame with cell coordinates}
 
-\item{roi_data}{Data frame with ROI polygon definitions}
+\item{roi_data}{Sf geometry data frame with ROI polygons}
 
 \item{scale_factor}{Scale factor for coordinate conversion}
 }

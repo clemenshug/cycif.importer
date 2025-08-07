@@ -2,17 +2,25 @@
 % Please edit documentation in R/roi.R
 \name{parse_point_str}
 \alias{parse_point_str}
-\title{Parse ROI points from string format}
+\title{Convert ROI points string to polygon matrix}
 \usage{
-parse_point_str(roi_points_str)
+parse_point_str(roi_points_str, roi_type, roi_name, roi_id, scale_factor)
 }
 \arguments{
-\item{roi_points_str}{String with ROI points in the format "x1,y1 x2,y2 ..."}
+\item{roi_points_str}{String with polygon points "x1,y1 x2,y2 x3,y3 ..."}
+
+\item{roi_type}{Type of ROI ("Polyline", "Polygon", "Rectangle")}
+
+\item{roi_name}{Name of the ROI}
+
+\item{roi_id}{Numeric ID of the ROI}
+
+\item{scale_factor}{Scale factor for coordinate conversion}
 }
 \value{
 Matrix with parsed points (x, y)
 }
 \description{
-Parse ROI points from string format
+Convert ROI points string to polygon matrix
 }
 \keyword{internal}

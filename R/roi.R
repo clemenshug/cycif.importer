@@ -50,7 +50,8 @@ cycif_assign_rois <- function(
 
     # Assign ROIs if polygon data provided
     rois_current_slide <- roi_data[[slide_name]]
-    data1 <- assign_rois_to_cells(data1, rois_current_slide, scale_factor)
+    rois_sf <- roi_df_to_sf(rois_current_slide, scale_factor)
+    data1 <- assign_rois_to_cells(data1, rois_sf, scale_factor)
 
     # Expand ROIs if requested
     if (expand_distance > 0) {
@@ -87,12 +88,66 @@ standardize_coordinates <- function(data, scale_factor) {
   return(data)
 }
 
-REQUIRED_ROI_VALS <- c("all_points", "Name", "type")
+#' Convert ROI points string to polygon matrix
+#'
+#' @param roi_points_str String with polygon points "x1,y1 x2,y2 x3,y3 ..."
+#' @param roi_type Type of ROI ("Polyline", "Polygon", "Rectangle")
+#' @param roi_name Name of the ROI
+#' @param roi_id Numeric ID of the ROI
+#' @param scale_factor Scale factor for coordinate conversion
+#'
+#' @return Matrix with parsed points (x, y)
+#' @keywords internal
+parse_point_str <- function(roi_points_str, roi_type, roi_name, roi_id, scale_factor) {
+  point_pairs <- stringr::str_split_1(roi_points_str, " ")
+  points_matrix <- matrix(NA, nrow = length(point_pairs), ncol = 2)
+
+  for (i in seq_along(point_pairs)) {
+    coords <- as.numeric(stringr::str_split_1(point_pairs[i], ","))
+    if (length(coords) == 2) {
+      points_matrix[i, ] <- coords
+    } else {
+      warning(sprintf("Invalid point format '%s'. Using ROI without this point.", point_pairs[i]))
+    }
+  }
+
+  # Remove any rows with NA values
+  points_matrix <- points_matrix[complete.cases(points_matrix), , drop = FALSE]
+
+  if (nrow(points_matrix) < 3) {
+    warning(sprintf("  ROI %d (%s): not enough points to form a polygon. Skipping ROI.", roi_id, roi_name))
+    return(NULL)
+  }
+
+  if (roi_type %in% c("Polyline", "Polygon")) {
+    if (nrow(points_matrix) < 3) {
+      # For Polygon and Polyline, we need at least 3 points
+      warning(sprintf("  ROI %d (%s): not enough points to form a polygon. Skipping ROI.", roi_id, roi_name))
+      return(NULL)
+    }
+    # Ensure polygon is closed (first and last points are the same)
+    if (!identical(points_matrix[1, ], points_matrix[nrow(points_matrix), ])) {
+      points_matrix <- rbind(points_matrix, points_matrix[1, ])
+    }
+  }
+  if (roi_type == "Rectangle" && nrow(points_matrix) != 4) {
+    warning(sprintf("  ROI %d (%s): Rectangle doesn't consist of 4 points. Skipping ROI.", roi_id, roi_name))
+    return(NULL)
+  }
+  if (!roi_type %in% c("Polygon", "Polyline", "Rectangle")) {
+    warning(sprintf("  ROI %d (%s): Unsupported type '%s'. Skipping ROI.", roi_id, roi_name, roi_type))
+    return(NULL)
+  }
+
+  points_matrix <- points_matrix * scale_factor
+
+  points_matrix
+}
 
 #' Assign ROIs to cells based on polygon coordinates
 #'
 #' @param data Data frame with cell coordinates
-#' @param roi_data Data frame with ROI polygon definitions
+#' @param roi_data Sf geometry data frame with ROI polygons
 #' @param scale_factor Scale factor for coordinate conversion
 #'
 #' @return Data frame with ROI assignments added
@@ -108,105 +163,40 @@ assign_rois_to_cells <- function(data, roi_data, scale_factor) {
 
   message(sprintf("  Processing %d ROIs", nrow(roi_data)))
 
-  # Process each ROI
-  for (i in seq_len(nrow(roi_data))) {
-    r <- roi_data[i,]
+  # Convert cell coordinates to sf points
+  cell_points <- data |>
+    filter(!is.na(Xt) & !is.na(Yt)) |>
+    sf::st_as_sf(coords = c("Xt", "Yt"))
 
-    # Check required columns
-    missing_vals <- purrr::map_lgl(
-      REQUIRED_ROI_VALS,
-      \(x) is.null(r[[x]]) || is.na(r[[x]]) || r[[x]] == ""
-    )
-    if (sum(missing_vals) > 0) {
-      warning(
-        sprintf(
-          "  Skipping ROI %d (%s): missing required values: %s",
-          i, r$Name, paste(REQUIRED_ROI_VALS[missing_vals], collapse = ", ")
-        )
+  if (nrow(cell_points) == 0) {
+    warning("No valid cell coordinates found")
+    return(data)
+  }
+
+  # Set same CRS for both datasets
+  sf::st_crs(cell_points) <- sf::st_crs(roi_data)
+
+  # Use spatial intersection to find which cells are in which ROIs
+  intersections <- sf::st_within(cell_points, roi_data)
+
+  n_multiple_roi <- sum(purrr::map_int(intersections, length) > 1)
+  if (n_multiple_roi > 0) {
+    warning(
+      sprintf(
+        "Found %d cells in multiple ROIs. Assigning first ROI only.",
+        n_multiple_roi
       )
-      next
-    }
-
-    # Parse and assign ROI
-    cells_assigned <- assign_single_roi(data, r$all_points, r$type, r$Name, i, scale_factor)
-    if (is.null(cells_assigned)) {
-      # Warning already issued in assign_single_roi
-      next
-    }
-    data$ROI[cells_assigned] <- i
-    data$ROIname[cells_assigned] <- r$Name
-    message(sprintf("    ROI %d (%s): %d cells assigned", i, r$Name, sum(cells_assigned)))
+    )
   }
+  roi_ids <- purrr::map_int(intersections, \(x) ifelse(length(x) > 0, x[1], 0))
+  data$ROI <- roi_ids
+  data$ROIname <- ifelse(roi_ids > 0, roi_data$Name[roi_ids], "none")
 
-  return(data)
-}
+  # Report assignment results
+  assigned_count <- sum(data$ROI != 0)
+  message(sprintf("  Assigned %d cells to ROIs", assigned_count))
 
-#' Parse ROI points from string format
-#'
-#' @param roi_points_str String with ROI points in the format "x1,y1 x2,y2 ..."
-#'
-#' @return Matrix with parsed points (x, y)
-#' @keywords internal
-parse_point_str <- function(roi_points_str) {
-    point_pairs <- stringr::str_split_1(roi_points_str, " ")
-  points_matrix <- matrix(NA, nrow = length(point_pairs), ncol = 2)
-
-  for (i in seq_along(point_pairs)) {
-    coords <- as.numeric(stringr::str_split_1(point_pairs[i], ","))
-    if (length(coords) == 2) {
-      points_matrix[i, ] <- coords
-    } else {
-      warning(sprintf("Invalid point format '%s'. Using ROI without this point.", point_pairs[i]))
-    }
-  }
-
-  # Remove any rows with NA values
-  points_matrix[complete.cases(points_matrix), , drop = FALSE]
-}
-
-#' Assign a single ROI to cells
-#'
-#' @param data Data frame with cell coordinates
-#' @param roi_points_str String with polygon points "x1,y1 x2,y2 x3,y3 ..."
-#' @param roi_type Type of ROI ("Polyline", "Polygon", "Rectangle")
-#' @param roi_name Name of the ROI
-#' @param roi_id Numeric ID of the ROI
-#' @param scale_factor Scale factor for coordinate conversion
-#'
-#' @return Logical vector indicating which cells are in the ROI
-#' @keywords internal
-assign_single_roi <- function(data, roi_points_str, roi_type, roi_name, roi_id, scale_factor) {
-  # Remove any rows with NA values
-  points_matrix <- parse_point_str(roi_points_str)
-
-  if (roi_type %in% c("Polyline", "Polygon") && nrow(points_matrix) < 3) {
-    warning(sprintf("  ROI %d (%s): not enough points to form a polygon. Skipping ROI.", roi_id, roi_name))
-    return(NULL)
-  }
-  if (roi_type == "Rectangle" && nrow(points_matrix) != 4) {
-    warning(sprintf("  ROI %d (%s): Rectangle doesn't consist of 4 points. Skipping ROI.", roi_id, roi_name))
-    return(NULL)
-  }
-  if (!roi_type %in% c("Polygon", "Polyline", "Rectangle")) {
-    warning(sprintf("  ROI %d (%s): Unsupported type '%s'. Skipping ROI.", roi_id, roi_name, roi_type))
-    return(NULL)
-  }
-
-  # Apply scale factor (convert from pixels to microns)
-  points_matrix <- points_matrix * scale_factor
-
-  # Test which cells are inside this ROI
-  inside_flags <- sp::point.in.polygon(
-    point.x = data$Xt,
-    point.y = data$Yt,
-    pol.x = points_matrix[, 1],
-    pol.y = points_matrix[, 2]
-  )
-
-  # Assign ROI ID and name to cells inside or on boundary (flags >= 1)
-  cells_in_roi <- inside_flags >= 1
-
-  return(cells_in_roi)
+  data
 }
 
 #' Expand ROI boundaries to include nearby cells
@@ -273,4 +263,68 @@ expand_roi_boundaries <- function(data1, expand_distance) {
   }
 
   return(data1)
+}
+
+#' Convert ROI dataframe to sf object
+#'
+#' Converts a ROI dataframe with polygon coordinates to an sf object
+#' with proper geometry column. Uses the existing parse_point_str function
+#' to process coordinate strings.
+#'
+#' @param roi_data Data frame with ROI definitions containing at minimum:
+#'   - Name: ROI name
+#'   - type: ROI type (e.g., "Polygon", "Rectangle")
+#'   - all_points: String with coordinates "x1,y1 x2,y2 x3,y3 ..."
+#' @param scale_factor Scale factor for coordinate conversion (default 1.0)
+#'
+#' @return sf object with geometry column and ROI metadata, or NULL if no valid ROIs
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Convert ROI data to sf
+#' roi_sf <- roi_df_to_sf(roi_data, scale_factor = 0.65)
+#' }
+roi_df_to_sf <- function(roi_data, scale_factor = 1.0) {
+  if (is.null(roi_data) || nrow(roi_data) == 0) {
+    return(NULL)
+  }
+
+  # Check required columns
+
+  validate_cell_data_structure(
+    roi_data, c("Name", "type", "all_points"), no_missing = TRUE
+  )
+
+  point_matrices <- purrr::pmap(
+    roi_data,
+    \(roi_name, type, all_points, roi_id, ...) {
+      parse_point_str(all_points, type, roi_name, roi_id, scale_factor)
+    }
+  )
+
+  polygons <- purrr::map(point_matrices, \(x) sf::st_polygon(list(x)))
+  # browser()
+
+  roi_sf <- sf::st_sf(
+    roi_data,
+    geometry = sf::st_sfc(polygons)
+  )
+
+  valid_polygons <- sf::st_is_valid(roi_sf, reason = TRUE)
+  if (!all(valid_polygons == "Valid Geometry")) {
+    invalid_idx <- which(valid_polygons != "Valid Geometry")
+    warning(
+      sprintf(
+        "Found %d invalid ROI geometries (%s)\nMaking them valid.",
+        length(invalid_idx),
+        paste0(paste0("ROI ", invalid_idx, " [", valid_polygons[invalid_idx], "]"), collapse = ", ")
+      )
+    )
+    roi_sf <- sf::st_make_valid(roi_sf)
+  }
+
+  message(sprintf("Created sf object with %d ROI geometries", nrow(roi_sf)))
+
+  return(roi_sf)
 }

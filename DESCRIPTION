@@ -18,12 +18,12 @@ Imports:
     dplyr,
     readr,
     stringr,
-    sp,
     FNN,
     qs,
     rlang,
     purrr,
-    powerjoin
+    powerjoin,
+    sf
 Suggests:
     testthat (>= 3.0.0),
     knitr,

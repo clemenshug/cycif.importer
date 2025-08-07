@@ -4,12 +4,14 @@
 \alias{validate_cell_data_structure}
 \title{Validate data frame structure for cell data}
 \usage{
-validate_cell_data_structure(data, required_cols)
+validate_cell_data_structure(data, required_cols, no_missing = FALSE)
 }
 \arguments{
 \item{data}{Data frame to validate}
 
 \item{required_cols}{Character vector of required column names}
+
+\item{no_missing}{Logical indicating if missing values are allowed}
 
 \item{context}{Character string describing the context for error messages}
 }

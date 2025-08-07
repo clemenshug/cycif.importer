@@ -3,10 +3,11 @@
 #' @param data Data frame to validate
 #' @param required_cols Character vector of required column names
 #' @param context Character string describing the context for error messages
+#' @param no_missing Logical indicating if missing values are allowed
 #'
 #' @return NULL (invisibly) if validation passes, otherwise stops with error
 #' @keywords internal
-validate_cell_data_structure <- function(data, required_cols) {
+validate_cell_data_structure <- function(data, required_cols, no_missing = FALSE) {
   # Get the variable name from the call
   data_name <- deparse(substitute(data))
 
@@ -23,6 +24,18 @@ validate_cell_data_structure <- function(data, required_cols) {
   if (length(missing_cols) > 0) {
     stop(sprintf("%s must contain columns: %s",
                 data_name, paste(missing_cols, collapse = ", ")))
+  }
+
+  if (no_missing) {
+    # Missing values are NA, '' or NULL
+    na_cols <- purrr::map_lgl(
+      data[required_cols],
+      \(x) any(is.na(x) | x == "" | is.null(x))
+    )
+    if (any(na_cols)) {
+      stop(sprintf("%s contains missing values in columns: %s",
+                   data_name, paste(required_cols[na_cols], collapse = ", ")))
+    }
   }
 
   invisible(NULL)
