@@ -1,4 +1,6 @@
 ```{r}
+library(sfnetworks)
+library(tidyverse)
 library(tidygraph)
 
 devtools::load_all(".")
@@ -8,73 +10,6 @@ csv_data <- "Id,Name,Text,type,all_points,X,Y,RadiusX,RadiusY,Width,Height,all_t
 df <- read.csv(text = csv_data, stringsAsFactors = FALSE)
 
 roi_sf <- roi_df_to_sf(df)
-
-x <- resolve_roi_overlaps(roi_sf)
-
-find_intersections <- function(roi_sf, max.overlap = .3) {
-  roi_sf <- roi_sf %>%
-    dplyr::mutate(
-      area = sf::st_area(geometry)
-    )
-  touch_points <- sf::st_intersection(sf::st_cast(roi_sf, "LINESTRING")) %>%
-    dplyr::filter(
-      n.overlaps == 2
-    )
-  sf::st_intersection(roi_sf) %>%
-    dplyr::filter(n.overlaps == 2)  %>%
-    # Figure out which touchpoint belongs to which polygon
-    dplyr::slice(
-      sf::st_distance(., touch_points) %>%
-        apply(1, which.min) %>%
-        order()
-    ) %>%
-    dplyr::mutate(
-      area = sf::st_area(geometry),
-      origin_1 = purrr::map_int(origins, 1L),
-      origin_2 = purrr::map_int(origins, 2L),
-      origin_1_area = roi_sf$area[origin_1],
-      origin_2_area = roi_sf$area[origin_2],
-      area_ratio_1 = area / origin_1_area,
-      area_ratio_2 = area / origin_2_area,
-      touch_points = sf::st_geometry(touch_points)
-    )
-}
-
-filter_intersections <- function(ints, max.overlap = .3) {
-  ints_too_large <- ints %>%
-    dplyr::filter(
-      area_ratio_1 > max.overlap | area_ratio_2 > max.overlap
-    )
-  if (nrow(ints_too_large) > 0) {
-    warning(
-      sprintf(
-        "Found %d intersection(s) with area ratio > %.2f. Not able to resolve overlap automatically.\n",
-        nrow(ints_too_large), max.overlap
-      ),
-      paste(
-        with(
-          ints_too_large,
-          paste0(
-            "  ", origin_1, " & ", origin_2,
-            ": intersection area = ", round(as.numeric(area), 2),
-            " (", signif(area_ratio_1, 2), " of ", origin_1, ", ",
-            signif(area_ratio_2, 2), " of ", origin_2, ")"
-          )
-        ),
-        collapse = "\n"
-      )
-    )
-  }
-  ints %>%
-    dplyr::filter(
-      area_ratio_1 <= max.overlap,
-      area_ratio_2 <= max.overlap
-    )
-}
-
-resolve_overlaps <- function()
-
-pairw_ints <- find_intersections(roi_sf)
 
 int <- sf::st_intersection(roi_sf) %>%
   dplyr::filter(
@@ -91,35 +26,21 @@ touch_points <- sf::st_intersection(sf::st_cast(roi_sf, "LINESTRING")) %>%
 
 sf::st_distance(touch_points, int)
 
-ints <- int_densified[2, ]
+ints <- int_densified[1, ]
 
-v <- sf::st_voronoi(ints)
+v <- sf::st_voronoi(ints, bOnlyEdges = TRUE)
 
-vertices <- sf::st_cast(ints, "POINT")
-points(vertices, pch = 19, col = "red", cex = 0.8)
-plot(
-  c(sf::st_geometry(v), sf::st_geometry(ints)), col = rgb(0, 0, 1, alpha = 0.5)
-)
+v_edges <- sf::st_cast(v, "LINESTRING")
 
-# make v individual polygons instead of a GOMETRYCOLLECTION
-v <- sf::st_collection_extract(v, "POLYGON")
+v_only_interior <- v_edges %>%
+  sf::st_filter(int, .predicate = sf::st_within)
 
-# cut away anything from v that's not within `ints`
-v_clipped <- sf::st_intersection(v, sf::st_union(ints))
+plot(sf::st_geometry(int))
+plot(sf::st_geometry(v_edges), add = TRUE, lwd = 0.1)
+plot(sf::st_geometry(v_only_interior), add = TRUE)
 
-# turn v into a point cloud, *all* points from each polygon
-v_points <- sf::st_cast(v, "LINESTRING")
-
-v_points_clipped <- sf::st_intersection(v_points, sf::st_union(ints))
-
-
-# using the lines from `v_points_clipped`, find the shortest path (using the edges
-# of the lines) between the two touch points in `touch_points`
-
-# Extract the two touch points as POINT geometries
-touch_pts <- sf::st_collection_extract(touch_points, "POINT")
 # In case it's a MULTIPOINT in a single row, cast it
-touch_pts <- sf::st_cast(touch_pts, "POINT")
+touch_pts <- sf::st_cast(touch_points, "POINT")
 if (nrow(touch_pts) < 2) {
   stop("Expected at least two touch points, found ", nrow(touch_pts))
 }
@@ -127,93 +48,56 @@ if (nrow(touch_pts) < 2) {
 start_pt <- touch_pts[1, ]
 end_pt   <- touch_pts[2, ]
 
-# Build a graph from the clipped Voronoi edge network
-# Keep only line geometries (exclude POINTs/collections) to avoid sfc_GEOMETRY issues
+# Find closest points on v_only_interior to start and end points
+closest_to_start <- sf::st_nearest_points(start_pt, v_only_interior[sf::st_nearest_feature(start_pt, v_only_interior), ])
+closest_to_end <- sf::st_nearest_points(end_pt, v_only_interior[sf::st_nearest_feature(end_pt, v_only_interior), ])
 
+plot(sf::st_geometry(int))
+plot(sf::st_geometry(closest_to_start), col = "blue", lwd = 2, add = TRUE)
+plot(sf::st_geometry(closest_to_end), col = "red", lwd = 2, add = TRUE)
 
-v_lines <- v_points_clipped[sf::st_geometry_type(v_points_clipped) %in% c("LINESTRING", "MULTILINESTRING"), ]
-if (nrow(v_lines) == 0) {
-  stop("No LINESTRING geometries found in the Voronoi edge network")
-}
-# Ensure all are LINESTRING
-v_lines <- sf::st_cast(v_lines, "LINESTRING")
-
-coords <- sf::st_coordinates(v_lines)
-if (is.null(dim(coords)) || nrow(coords) < 2) {
-  stop("Voronoi edge network is empty or too small to build a graph")
-}
-coord_df <- data.frame(
-  x = coords[, "X"],
-  y = coords[, "Y"],
-  line_id = coords[, "L1"],
-  ord = seq_len(nrow(coords))
+# Combine with existing v_only_interior
+v_with_pts <- bind_rows(
+  v_only_interior,
+  sf::st_sf(geometry = closest_to_start),
+  sf::st_sf(geometry = closest_to_end)
 )
-# Create stable node keys by rounding coordinates to merge nearly identical vertices
-round_digits <- 3
-coord_df$rx <- round(coord_df$x, round_digits)
-coord_df$ry <- round(coord_df$y, round_digits)
-coord_df$key <- paste(coord_df$rx, coord_df$ry, sep = ",")
 
-# Unique nodes as POINT sf
-nodes_df <- unique(coord_df[, c("key", "rx", "ry")])
-nodes_sf <- sf::st_as_sf(nodes_df, coords = c("rx", "ry"), crs = sf::st_crs(v_lines))
-
-# Build edges between consecutive vertices along each LINESTRING
-mk_edges <- function(df) {
-  df <- df[order(df$ord), ]
-  if (nrow(df) < 2) return(NULL)
-  from <- head(df$key, -1)
-  to   <- tail(df$key, -1)
-  # Use original (unrounded) coords to compute lengths
-  dx <- diff(df$x)
-  dy <- diff(df$y)
-  w  <- sqrt(dx^2 + dy^2)
-  data.frame(from = from, to = to, weight = w, stringsAsFactors = FALSE)
-}
-edges_list <- lapply(split(coord_df, coord_df$line_id), mk_edges)
-edges_df <- do.call(rbind, edges_list)
-# Remove zero-length and self-loop edges
-edges_df <- edges_df[edges_df$from != edges_df$to & edges_df$weight > 0, , drop = FALSE]
-# Deduplicate undirected edges (keep minimum weight if duplicated)
-if (nrow(edges_df)) {
-  a <- pmin(edges_df$from, edges_df$to)
-  b <- pmax(edges_df$from, edges_df$to)
-  edges_df$u <- paste(a, b, sep = "|")
-  edges_df <- edges_df[order(edges_df$u, edges_df$weight), ]
-  edges_df <- edges_df[!duplicated(edges_df$u), c("from", "to", "weight")]
-} else {
-  stop("No usable edges in Voronoi network to construct graph")
-}
-
-# Prepare igraph objects
-vertices_df <- data.frame(name = nodes_df$key, stringsAsFactors = FALSE)
-# Build graph as undirected with edge weights
-G <- igraph::graph_from_data_frame(d = edges_df, vertices = vertices_df, directed = FALSE)
-igraph::E(G)$weight <- edges_df$weight
+# Construct graph
+v_graph <- as_sfnetwork(
+  v_with_pts,
+  directed = FALSE,
+  length_as_weight = TRUE
+)
 
 # Map the two touch points to nearest network nodes
-idx_start <- sf::st_nearest_feature(start_pt, nodes_sf)
-idx_end   <- sf::st_nearest_feature(end_pt, nodes_sf)
-start_key <- nodes_df$key[idx_start]
-end_key   <- nodes_df$key[idx_end]
+idx_start <- sf::st_nearest_feature(start_pt, activate(v_graph, "nodes"))
+idx_end   <- sf::st_nearest_feature(end_pt, v_graph)
 
 # Compute shortest path
-sp <- igraph::shortest_paths(G, from = start_key, to = end_key, weights = igraph::E(G)$weight)$vpath[[1]]
-if (length(sp) == 0) {
-  stop("No path found between the two touch points on the Voronoi edge network")
-}
-path_keys <- igraph::as_ids(sp)
-# Reconstruct LINESTRING geometry for the path
-path_pts <- nodes_sf[match(path_keys, nodes_df$key), ]
-path_geom <- sf::st_sfc(sf::st_linestring(do.call(rbind, lapply(sf::st_geometry(path_pts), sf::st_coordinates))), crs = sf::st_crs(nodes_sf))
-shortest_path <- sf::st_sf(geometry = path_geom)
+v_shortest <- v_graph %>%
+  activate("edges") %>%
+  convert(to_spatial_shortest_paths, from = idx_start, to = idx_end)
 
-# Optional: plot the path on top of the existing network
-plot(sf::st_geometry(roi_sf), col = rgb(0, 0, 1, alpha = 0.5))
-plot(sf::st_geometry(v_lines), col = rgb(0,0,0,0.2), add = TRUE)
-points(sf::st_geometry(start_pt), col = "green", pch = 19, cex = 1.2)
-points(sf::st_geometry(end_pt), col = "orange", pch = 19, cex = 1.2)
-plot(sf::st_geometry(shortest_path), col = "red", lwd = 2, add = TRUE)
+plot(sf::st_geometry(int), col = rgb(0, 0, 1, alpha = 0.5))
+plot(sf::st_geometry(v_shortest), col = "red", lwd = 2, add = TRUE)
+
+# v_shortest_single <- v_shortest %>%
+#   activate("edges") %>%
+#   sf::st_as_sf() %>%
+#   summarise(geometry = sf::st_union(geometry)) %>%
+#   sf::st_cast("LINESTRING")
+v_shortest_single <- v_shortest %>%
+  activate("edges") %>%
+  sf::st_as_sf() %>%
+  arrange(.tidygraph_edge_index) %>%
+  pull(geometry) %>%
+  sf::st_combine() %>%
+  sf::st_line_merge() %>%
+  sf::st_cast("LINESTRING")
+
+plot(sf::st_geometry(int), col = rgb(0, 0, 1, alpha = 0.5))
+plot(sf::st_geometry(v_shortest_single), col = "red", lwd = 2, add = TRUE)
 
 extend_linestring <- function(line, d) {
   # extract coordinates matrix (X,Y)
@@ -242,19 +126,16 @@ extend_linestring <- function(line, d) {
   # return a raw LINESTRING geometry
   st_linestring(new_mat)
 }
-# Determine a small extension length relative to ROI size (fallback to 1e-6)
-bb <- sf::st_bbox(roi_sf)
-span <- max(as.numeric(bb["xmax"] - bb["xmin"]), as.numeric(bb["ymax"] - bb["ymin"]))
-extend_by <- ifelse(is.finite(span) && span > 0, span * 1e-3, 1e-6)
-# If you want a fixed tiny extension instead, set: extend_by <- 1e-6
-cut_xy <- extend_linestring(sf::st_geometry(shortest_path), 1e-6)
+
+cut_xy <- extend_linestring(sf::st_geometry(v_shortest_single), 1e-6)
 
 split_and_keep_biggest <- function(poly_row, splitter) {
   # Ensure validity before splitting
   poly_geom <- sf::st_make_valid(poly_row)
   split_geom <- lwgeom::st_split(poly_geom, splitter)
+  plot(poly_geom)
+  plot(splitter, add = TRUE, col = "red", lwd = 2)
   parts <- sf::st_collection_extract(split_geom, "POLYGON")
-  # browser()
   if (length(parts) != 2) {
     stop("Expected 2 parts after splitting, found ", length(parts), ".")
   }
@@ -267,7 +148,8 @@ roi_sf_disjoint <- roi_sf %>%
     geometry = purrr::map(
       geometry,
       \(x) split_and_keep_biggest(x, sf::st_geometry(cut_xy))
-    )
+    ) %>%
+      do.call(c, .)
   )
 
 # Optional: verify disjointness
@@ -276,7 +158,7 @@ roi_sf_disjoint <- roi_sf %>%
 # Plot result
 plot(sf::st_geometry(roi_sf), col = adjustcolor("skyblue", alpha.f = 0.4), border = NA)
 plot(sf::st_geometry(roi_sf_disjoint), add = TRUE, col = c(adjustcolor("#1f77b4", 0.6), adjustcolor("#ff7f0e", 0.6)))
-plot(sf::st_geometry(cut_line_ext), add = TRUE, col = "red", lwd = 2)
+plot(sf::st_geometry(cut_xy), add = TRUE, col = "red", lwd = 2)
 points(sf::st_geometry(start_pt), col = "green", pch = 19)
 points(sf::st_geometry(end_pt), col = "orange", pch = 19)
 
