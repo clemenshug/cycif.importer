@@ -1,5 +1,78 @@
 #' @importFrom rlang .data
 #'
+#' Resolve overlaps in ROI data by slide
+#'
+#' Takes ROI data (output from cycif_load_roi_data) and resolves overlapping
+#' polygons for each slide separately. Converts ROI data to sf format, resolves
+#' overlaps using Voronoi-based splitting, and returns a combined sf object.
+#'
+#' @param roi_data Data frame with ROI definitions (output from cycif_load_roi_data)
+#' @param scale_factor Scale factor for coordinate conversion (default 1.0)
+#'
+#' @return An sf object with resolved ROI polygons, preserving slideName and metadata
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Load ROI data and resolve overlaps
+#' roi_data <- cycif_load_roi_data("/path/to/rois")
+#' resolved_rois <- resolve_roi_overlaps(roi_data)
+#' }
+resolve_roi_overlaps <- function(roi_data, scale_factor = 1.0) {
+  # Input validation
+  if (is.null(roi_data)) {
+    message("No ROI data provided")
+    return(NULL)
+  }
+
+  # Standardize input data to list of dataframes by slide
+  roi_by_slide <- standardize_input_data(roi_data)
+
+  if (length(roi_by_slide) == 0) {
+    message("No ROI data to process")
+    return(NULL)
+  }
+
+  slide_names <- names(roi_by_slide)
+
+  message(sprintf("Processing %d slides: %s",
+                  length(slide_names),
+                  paste(slide_names, collapse = ", ")))
+
+  resolved_slides <- list()
+
+  # Process each slide separately
+  for (slide_name in slide_names) {
+    message(sprintf("Processing slide: %s", slide_name))
+    slide_roi_data <- roi_by_slide[[slide_name]]
+
+    # Convert to sf format
+    slide_sf <- roi_df_to_sf(slide_roi_data, scale_factor)
+
+    if (is.null(slide_sf) || nrow(slide_sf) == 0) {
+      message(sprintf("  No valid ROI geometries for slide %s", slide_name))
+      next
+    }
+
+    # Resolve overlaps for this slide
+    resolved_sf <- resolve_polygon_overlaps(slide_sf)
+
+    # Store resolved result
+    resolved_slides[[slide_name]] <- resolved_sf
+  }
+
+  # Combine all slides back together
+  if (length(resolved_slides) > 0) {
+    result <- dplyr::bind_rows(resolved_slides)
+    message(sprintf("Combined %d slides with %d total ROIs",
+                    length(resolved_slides), nrow(result)))
+    return(result)
+  } else {
+    message("No slides processed successfully")
+    return(NULL)
+  }
+}
+
 #' Resolve overlaps between polygons by splitting them
 #'
 #' Takes a list of polygons and resolves pairwise overlaps by splitting the
@@ -10,7 +83,6 @@
 #' @param polygon_sf An sf object containing POLYGON geometries
 #' @param max_iterations Maximum number of iterations to prevent infinite loops
 #'   (default 100)
-#' @param verbose Whether to print progress messages (default TRUE)
 #'
 #' @return An sf object with overlaps resolved
 #' @export
@@ -20,14 +92,14 @@
 #' # Resolve overlaps in a set of ROI polygons
 #' resolved_polygons <- resolve_polygon_overlaps(roi_sf)
 #' }
-resolve_polygon_overlaps <- function(polygon_sf, max_iterations = 100, verbose = TRUE) {
+resolve_polygon_overlaps <- function(polygon_sf, max_iterations = 100) {
   # Input validation
   if (!inherits(polygon_sf, "sf")) {
     stop("Input must be an sf object")
   }
 
   if (nrow(polygon_sf) < 2) {
-    if (verbose) message("Less than 2 polygons provided, no overlaps to resolve")
+    message("Less than 2 polygons provided, no overlaps to resolve")
     return(polygon_sf)
   }
 
@@ -40,64 +112,50 @@ resolve_polygon_overlaps <- function(polygon_sf, max_iterations = 100, verbose =
     stop("All geometries must be POLYGON or MULTIPOLYGON")
   }
 
-  if (verbose) {
-    message(sprintf(
-      "Starting overlap resolution for %d polygons",
-      nrow(polygon_sf)
-    ))
+  message(sprintf(
+    "Starting overlap resolution for %d polygons",
+    nrow(polygon_sf)
+  ))
+
+  # Find all overlapping pairs once
+  overlap_pairs <- find_polygon_overlaps(polygon_sf)
+
+  if (length(overlap_pairs) == 0) {
+    message("No overlaps found")
+    return(polygon_sf)
   }
 
-  iteration <- 0
+  message(sprintf("Found %d overlapping pairs to resolve", length(overlap_pairs)))
 
-  while (iteration < max_iterations) {
-    iteration <- iteration + 1
+  # Process each overlapping pair
+  for (pair_idx in seq_along(overlap_pairs)) {
+    pair_indices <- overlap_pairs[[pair_idx]]
 
-    # Find all overlapping pairs
-    overlap_pairs <- find_polygon_overlaps(polygon_sf)
-
-    if (length(overlap_pairs) == 0) {
-      if (verbose) {
-        message(sprintf("No overlaps found after %d iterations", iteration - 1))
-      }
-      break
-    }
-
-    if (verbose) {
-      message(sprintf(
-        "Iteration %d: Found %d overlapping pairs",
-        iteration, length(overlap_pairs)
+    # Check that each overlap involves exactly two polygons
+    if (length(pair_indices) != 2) {
+      stop(sprintf(
+        "Overlap %d involves %d polygons, but only pairwise overlaps (2 polygons) are supported. Three-way or higher-order overlaps detected.",
+        pair_idx, length(pair_indices)
       ))
     }
 
-    # Process the first overlapping pair
-    pair_indices <- overlap_pairs[[1]]
     i <- pair_indices[1]
     j <- pair_indices[2]
 
-    if (verbose) {
-      message(sprintf(
-        "  Resolving overlap between polygons %d and %d", i, j
-      ))
-    }
+    message(sprintf(
+      "Processing pair %d/%d: Resolving overlap between polygons %d and %d",
+      pair_idx, length(overlap_pairs), i, j
+    ))
 
     # Resolve this pairwise overlap
-    resolved_pair <- resolve_pairwise_overlap(polygon_sf[c(i, j), ], verbose = verbose)
+    resolved_pair <- resolve_pairwise_overlap(polygon_sf[c(i, j), ])
 
     # Update the original sf object with resolved polygons
     polygon_sf[i, ]$geometry <- resolved_pair$geometry[1]
     polygon_sf[j, ]$geometry <- resolved_pair$geometry[2]
   }
 
-  if (iteration >= max_iterations) {
-    warning(sprintf(
-      "Maximum iterations (%d) reached. Some overlaps may remain.",
-      max_iterations
-    ))
-  }
-
-  if (verbose) {
-    message("Overlap resolution complete")
-  }
+  message("Overlap resolution complete")
 
   return(polygon_sf)
 }
@@ -134,11 +192,9 @@ find_polygon_overlaps <- function(polygon_sf) {
 #' Resolve overlap between exactly two polygons
 #'
 #' @param two_polygon_sf An sf object with exactly 2 polygon geometries
-#' @param verbose Whether to print progress messages
-#'
 #' @return An sf object with the two polygons after resolving their overlap
 #' @keywords internal
-resolve_pairwise_overlap <- function(two_polygon_sf, verbose = TRUE) {
+resolve_pairwise_overlap <- function(two_polygon_sf) {
   if (nrow(two_polygon_sf) != 2) {
     stop("resolve_pairwise_overlap requires exactly 2 polygons")
   }
@@ -147,7 +203,7 @@ resolve_pairwise_overlap <- function(two_polygon_sf, verbose = TRUE) {
   intersection <- sf::st_intersection(two_polygon_sf)
 
   if (nrow(intersection) == 0) {
-    if (verbose) message("    No intersection found between polygons")
+    message("    No intersection found between polygons")
     return(two_polygon_sf)
   }
 
@@ -155,26 +211,38 @@ resolve_pairwise_overlap <- function(two_polygon_sf, verbose = TRUE) {
   # Look for intersection with origins indicating both polygons
   target_intersection <- intersection[
     purrr::map_lgl(intersection$origins, \(x) length(x) == 2 && all(x %in% c(1L, 2L))),
-  ]
+  ] %>%
+    suppressWarnings(sf::st_cast("POLYGON"))
 
   if (nrow(target_intersection) == 0) {
-    if (verbose) message("    No direct intersection between the two polygons")
+    message("    No direct intersection between the two polygons")
     return(two_polygon_sf)
   }
 
 
-  # Create splitting line through the overlap
-  splitting_line <- create_splitting_line(target_intersection, two_polygon_sf, verbose = verbose)
-
-  if (is.null(splitting_line)) {
-    if (verbose) message("    Could not create splitting line")
-    return(two_polygon_sf)
-  }
-
-  # Split both polygons and keep the larger pieces
+  # Initialize result with original polygons
   result_sf <- two_polygon_sf
-  result_sf[1, ]$geometry <- split_and_keep_largest(two_polygon_sf[1, ]$geometry, splitting_line)
-  result_sf[2, ]$geometry <- split_and_keep_largest(two_polygon_sf[2, ]$geometry, splitting_line)
+
+  # Iterate through all intersections between the pair
+  for (i in seq_len(nrow(target_intersection))) {
+    message(sprintf("    Processing intersection %d of %d", i,
+                    nrow(target_intersection)))
+
+    # Create splitting line for this specific intersection
+    splitting_line <- create_splitting_line(target_intersection[i, ], result_sf)
+
+    if (is.null(splitting_line)) {
+      message(sprintf("    Could not create splitting line for intersection %d",
+                      i))
+      next  # Skip this intersection and continue with the next one
+    }
+
+    # Split both polygons and keep the larger pieces
+    result_sf[1, ]$geometry <- split_and_keep_largest(result_sf[1, ]$geometry,
+                                                       splitting_line)
+    result_sf[2, ]$geometry <- split_and_keep_largest(result_sf[2, ]$geometry,
+                                                       splitting_line)
+  }
 
   return(result_sf)
 }
@@ -184,29 +252,31 @@ resolve_pairwise_overlap <- function(two_polygon_sf, verbose = TRUE) {
 #'
 #' @param intersection_sf The intersection geometry between two polygons
 #' @param two_polygon_sf The two original polygons
-#' @param verbose Whether to print progress messages
-#'
 #' @return An sf linestring geometry for splitting, or NULL if failed
 #' @keywords internal
-create_splitting_line <- function(intersection_sf, two_polygon_sf, verbose = TRUE) {
+create_splitting_line <- function(intersection_sf, two_polygon_sf) {
   # Add additional points along polygon boundary for better Voronoi diagram
   intersection_densified <- sf::st_segmentize(intersection_sf, dfMaxLength = 1)
 
+  # Compute touch points only on region of original polygons that are relevant
+  # to this intersection
+  two_polygons_clipped <- sf::st_intersection(two_polygon_sf, sf::st_buffer(intersection_sf, 1e-6))
+
   # Find touch points where the two polygon boundaries intersect
-  touch_points <- sf::st_intersection(sf::st_cast(two_polygon_sf, "LINESTRING"))
+  touch_points <- sf::st_intersection(suppressWarnings(sf::st_cast(two_polygons_clipped, "LINESTRING")))
   touch_points <- touch_points[
     purrr::map_lgl(touch_points$origins, \(x) identical(x, c(1L, 2L))),
   ]
 
   if (nrow(touch_points) == 0) {
-    if (verbose) message("      No touch points found")
+    message("      No touch points found")
     return(NULL)
   }
 
   # Cast to individual points if needed
-  touch_pts <- sf::st_cast(touch_points, "POINT")
+  touch_pts <- suppressWarnings(sf::st_cast(touch_points, "POINT"))
   if (nrow(touch_pts) < 2) {
-    if (verbose) message("      Need at least 2 touch points, found ", nrow(touch_pts))
+    message("      Need at least 2 touch points, found ", nrow(touch_pts))
     return(NULL)
   }
 
@@ -216,13 +286,13 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf, verbose = TRU
 
   # Create Voronoi diagram from intersection points
   voronoi_edges <- sf::st_voronoi(intersection_densified[1, ], bOnlyEdges = TRUE)
-  voronoi_lines <- sf::st_cast(voronoi_edges, "LINESTRING")
+  voronoi_lines <- suppressWarnings(sf::st_cast(voronoi_edges, "LINESTRING"))
 
   # Filter to only interior Voronoi edges
   voronoi_interior <- voronoi_lines[sf::st_within(voronoi_lines, intersection_sf, sparse = FALSE), ]
 
   if (length(voronoi_interior) == 0) {
-    if (verbose) message("      No interior Voronoi edges found")
+    message("      No interior Voronoi edges found")
     return(NULL)
   }
 
@@ -264,14 +334,14 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf, verbose = TRU
       dplyr::arrange(.data$.tidygraph_edge_index)
 
     if (nrow(path_edges) == 0) {
-      if (verbose) message("      No path found between touch points")
+      message("      No path found between touch points")
       return(NULL)
     }
 
     path_geometry <- path_edges$geometry |>
       sf::st_combine() |>
       sf::st_line_merge() |>
-      sf::st_cast("LINESTRING")
+      suppressWarnings(sf::st_cast("LINESTRING"))
 
     # Extend the line slightly to ensure clean splits
     extended_line <- extend_linestring(path_geometry, 1e-6)
@@ -279,7 +349,7 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf, verbose = TRU
     return(sf::st_sfc(extended_line))
 
   }, error = function(e) {
-    if (verbose) message("      Error creating splitting line: ", e$message)
+    message("      Error creating splitting line: ", e$message)
     return(NULL)
   })
 }
