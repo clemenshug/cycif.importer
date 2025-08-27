@@ -25,22 +25,17 @@ resolve_roi_overlaps <- function(roi_data, return_format = c("df", "sf")) {
     \(x, slide_name) {
       message(sprintf("Processing slide: %s", slide_name))
       slide_sf <- roi_df_to_sf(x, scale_factor = 1)
-      resolve_polygon_overlaps(slide_sf)
+      result <- resolve_polygon_overlaps(slide_sf)
+
+      if (return_format == "df") {
+        result <- sf_to_roi_df(result, scale_factor = 1)
+      }
+
+      result
     }
   )
 
-  if (return_format == "sf") {
-    resolved_slides <- dplyr::bind_rows(resolved_slides, .id = "slideName")
-  } else if (return_format == "df") {
-    # Convert each resolved slide back to dataframe format
-    resolved_slides <- purrr::map(
-      resolved_slides,
-      \(x) {
-        sf_to_roi_df(x, scale_factor = 1)
-      }
-    )
-  }
-
+  # Combine all slides with proper slide name preservation
   dplyr::bind_rows(resolved_slides, .id = "slideName")
 }
 
@@ -93,13 +88,11 @@ cast_quiet <- function(...) {
 #' Resolve overlaps between polygons by splitting them
 #'
 #' Takes a list of polygons and resolves pairwise overlaps by splitting the
-#' overlapping regions. Only handles cases where at most two polygons overlap
-#' (no three-way overlaps). The overlaps are resolved iteratively using
-#' Voronoi-based splitting lines.
+#' overlapping regions. Only handles cases where at most two polygons overlap.
+#' The overlaps are resolved iteratively using Voronoi-based splitting lines.
 #'
-#' @param polygon_sf An sf object containing POLYGON geometries
-#' @param max_iterations Maximum number of iterations to prevent infinite loops
-#'   (default 100)
+#' @param polygon_df A dataframe or sf object containing ROI polygons, like
+#'   the output from `cycif_load_roi_data()`.
 #'
 #' @return An sf object with overlaps resolved
 #' @export
@@ -109,10 +102,11 @@ cast_quiet <- function(...) {
 #' # Resolve overlaps in a set of ROI polygons
 #' resolved_polygons <- resolve_polygon_overlaps(roi_sf)
 #' }
-resolve_polygon_overlaps <- function(polygon_sf, max_iterations = 100) {
-  # Input validation
-  if (!inherits(polygon_sf, "sf")) {
-    stop("Input must be an sf object")
+resolve_polygon_overlaps <- function(polygon_df) {
+  if (inherits(polygon_df, "sf")) {
+    polygon_sf <- polygon_df
+  } else {
+    polygon_sf <- roi_df_to_sf(polygon_df, scale_factor = 1)
   }
 
   if (nrow(polygon_sf) < 2) {
@@ -217,7 +211,7 @@ resolve_pairwise_overlap <- function(two_polygon_sf) {
   }
 
   # Find intersection between all polygon pairs
-  intersection <- sf::st_intersection(two_polygon_sf)
+  intersection <- suppressWarnings(sf::st_intersection(two_polygon_sf))
 
   if (nrow(intersection) == 0) {
     message("    No intersection found between polygons")
@@ -235,7 +229,6 @@ resolve_pairwise_overlap <- function(two_polygon_sf) {
     message("    No direct intersection between the two polygons")
     return(two_polygon_sf)
   }
-
 
   # Initialize result with original polygons
   result_sf <- two_polygon_sf
@@ -277,14 +270,14 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf) {
 
   # Compute touch points only on region of original polygons that are relevant
   # to this intersection
-  two_polygons_clipped <- sf::st_intersection(
+  two_polygons_clipped <- suppressWarnings(sf::st_intersection(
     two_polygon_sf, sf::st_buffer(intersection_sf, 1e-6)
-  )
+  ))
 
   # Find touch points where the two polygon boundaries intersect
-  touch_points <- sf::st_intersection(
+  touch_points <- suppressWarnings(sf::st_intersection(
     cast_quiet(two_polygons_clipped, "LINESTRING")
-  )
+  ))
   touch_points <- touch_points[
     purrr::map_lgl(touch_points$origins, \(x) identical(x, c(1L, 2L))),
   ]
