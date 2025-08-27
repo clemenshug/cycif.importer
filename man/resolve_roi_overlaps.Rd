@@ -4,7 +4,7 @@
 \alias{resolve_roi_overlaps}
 \title{Resolve overlaps in ROI data by slide}
 \usage{
-resolve_roi_overlaps(roi_data, scale_factor = 1)
+resolve_roi_overlaps(roi_data, return_format = c("df", "sf"))
 }
 \arguments{
 \item{roi_data}{Data frame with ROI definitions (output from cycif_load_roi_data)}
@@ -15,9 +15,8 @@ resolve_roi_overlaps(roi_data, scale_factor = 1)
 An sf object with resolved ROI polygons, preserving slideName and metadata
 }
 \description{
-Takes ROI data (output from cycif_load_roi_data) and resolves overlapping
-polygons for each slide separately. Converts ROI data to sf format, resolves
-overlaps using Voronoi-based splitting, and returns a combined sf object.
+Takes ROI data (output from \code{cycif_load_roi_data()}) and resolves overlapping
+ROIs by separating them into distinct non-overlapping regions.
 }
 \examples{
 \dontrun{

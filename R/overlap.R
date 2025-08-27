@@ -32,10 +32,62 @@ resolve_roi_overlaps <- function(roi_data, return_format = c("df", "sf")) {
   if (return_format == "sf") {
     resolved_slides <- dplyr::bind_rows(resolved_slides, .id = "slideName")
   } else if (return_format == "df") {
-
+    # Convert each resolved slide back to dataframe format
+    resolved_slides <- purrr::map(
+      resolved_slides,
+      \(x) {
+        sf_to_roi_df(x, scale_factor = 1)
+      }
+    )
   }
 
-  resolved_slides
+  dplyr::bind_rows(resolved_slides, .id = "slideName")
+}
+
+#' Convert sf geometries back to ROI dataframe format
+#'
+#' Inverse operation of roi_df_to_sf(). Converts sf polygon geometries back
+#' to ROI dataframe format with coordinate strings.
+#'
+#' @param sf_data sf object with polygon geometries and ROI metadata
+#' @param scale_factor Scale factor used in original conversion (default 1.0)
+#'
+#' @return Data frame in ROI format with all_points column containing coordinate strings
+#' @keywords internal
+sf_to_roi_df <- function(sf_data, scale_factor = 1.0) {
+  if (is.null(sf_data) || nrow(sf_data) == 0) {
+    return(NULL)
+  }
+
+  # Extract coordinate strings from geometries
+  all_points <- purrr::map_chr(sf_data$geometry, function(geom) {
+    # Extract coordinate matrix
+    coord_matrix <- sf::st_coordinates(geom)[, c("X", "Y")]
+
+    # Apply inverse scale factor
+    coord_matrix <- coord_matrix / scale_factor
+
+    # Ensure polygon is closed (first and last points should be identical)
+    if (nrow(coord_matrix) > 1) {
+      if (!identical(coord_matrix[1, ], coord_matrix[nrow(coord_matrix), ])) {
+        coord_matrix <- rbind(coord_matrix, coord_matrix[1, ])
+      }
+    }
+
+    # Convert to coordinate string format "x1,y1 x2,y2 x3,y3 ..."
+    coord_pairs <- paste(coord_matrix[, 1], coord_matrix[, 2], sep = ",")
+    paste(coord_pairs, collapse = " ")
+  })
+
+  # Create result dataframe with updated all_points
+  result <- sf::st_drop_geometry(sf_data)
+  result$all_points <- all_points
+
+  return(result)
+}
+
+cast_quiet <- function(...) {
+  suppressWarnings(sf::st_cast(...))
 }
 
 #' Resolve overlaps between polygons by splitting them
@@ -176,8 +228,8 @@ resolve_pairwise_overlap <- function(two_polygon_sf) {
   # Look for intersection with origins indicating both polygons
   target_intersection <- intersection[
     purrr::map_lgl(intersection$origins, \(x) length(x) == 2 && all(x %in% c(1L, 2L))),
-  ] %>%
-    suppressWarnings(sf::st_cast("POLYGON"))
+  ] |>
+    cast_quiet("POLYGON")
 
   if (nrow(target_intersection) == 0) {
     message("    No direct intersection between the two polygons")
@@ -225,10 +277,14 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf) {
 
   # Compute touch points only on region of original polygons that are relevant
   # to this intersection
-  two_polygons_clipped <- sf::st_intersection(two_polygon_sf, sf::st_buffer(intersection_sf, 1e-6))
+  two_polygons_clipped <- sf::st_intersection(
+    two_polygon_sf, sf::st_buffer(intersection_sf, 1e-6)
+  )
 
   # Find touch points where the two polygon boundaries intersect
-  touch_points <- sf::st_intersection(suppressWarnings(sf::st_cast(two_polygons_clipped, "LINESTRING")))
+  touch_points <- sf::st_intersection(
+    cast_quiet(two_polygons_clipped, "LINESTRING")
+  )
   touch_points <- touch_points[
     purrr::map_lgl(touch_points$origins, \(x) identical(x, c(1L, 2L))),
   ]
@@ -239,7 +295,7 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf) {
   }
 
   # Cast to individual points if needed
-  touch_pts <- suppressWarnings(sf::st_cast(touch_points, "POINT"))
+  touch_pts <- cast_quiet(touch_points, "POINT")
   if (nrow(touch_pts) < 2) {
     message("      Need at least 2 touch points, found ", nrow(touch_pts))
     return(NULL)
@@ -251,7 +307,7 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf) {
 
   # Create Voronoi diagram from intersection points
   voronoi_edges <- sf::st_voronoi(intersection_densified[1, ], bOnlyEdges = TRUE)
-  voronoi_lines <- suppressWarnings(sf::st_cast(voronoi_edges, "LINESTRING"))
+  voronoi_lines <- cast_quiet(voronoi_edges, "LINESTRING")
 
   # Filter to only interior Voronoi edges
   voronoi_interior <- voronoi_lines[sf::st_within(voronoi_lines, intersection_sf, sparse = FALSE), ]
@@ -306,7 +362,7 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf) {
     path_geometry <- path_edges$geometry |>
       sf::st_combine() |>
       sf::st_line_merge() |>
-      suppressWarnings(sf::st_cast("LINESTRING"))
+      cast_quiet("LINESTRING")
 
     # Extend the line slightly to ensure clean splits
     extended_line <- extend_linestring(path_geometry, 1e-6)
