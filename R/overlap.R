@@ -1,10 +1,7 @@
-#' @importFrom rlang .data
-#'
 #' Resolve overlaps in ROI data by slide
 #'
-#' Takes ROI data (output from cycif_load_roi_data) and resolves overlapping
-#' polygons for each slide separately. Converts ROI data to sf format, resolves
-#' overlaps using Voronoi-based splitting, and returns a combined sf object.
+#' Takes ROI data (output from `cycif_load_roi_data()`) and resolves overlapping
+#' ROIs by separating them into distinct non-overlapping regions.
 #'
 #' @param roi_data Data frame with ROI definitions (output from cycif_load_roi_data)
 #' @param scale_factor Scale factor for coordinate conversion (default 1.0)
@@ -18,59 +15,27 @@
 #' roi_data <- cycif_load_roi_data("/path/to/rois")
 #' resolved_rois <- resolve_roi_overlaps(roi_data)
 #' }
-resolve_roi_overlaps <- function(roi_data, scale_factor = 1.0) {
-  # Input validation
-  if (is.null(roi_data)) {
-    message("No ROI data provided")
-    return(NULL)
-  }
-
+resolve_roi_overlaps <- function(roi_data, return_format = c("df", "sf")) {
   # Standardize input data to list of dataframes by slide
   roi_by_slide <- standardize_input_data(roi_data)
+  return_format <- match.arg(return_format)
 
-  if (length(roi_by_slide) == 0) {
-    message("No ROI data to process")
-    return(NULL)
-  }
-
-  slide_names <- names(roi_by_slide)
-
-  message(sprintf("Processing %d slides: %s",
-                  length(slide_names),
-                  paste(slide_names, collapse = ", ")))
-
-  resolved_slides <- list()
-
-  # Process each slide separately
-  for (slide_name in slide_names) {
-    message(sprintf("Processing slide: %s", slide_name))
-    slide_roi_data <- roi_by_slide[[slide_name]]
-
-    # Convert to sf format
-    slide_sf <- roi_df_to_sf(slide_roi_data, scale_factor)
-
-    if (is.null(slide_sf) || nrow(slide_sf) == 0) {
-      message(sprintf("  No valid ROI geometries for slide %s", slide_name))
-      next
+  resolved_slides <- purrr::imap(
+    roi_by_slide,
+    \(x, slide_name) {
+      message(sprintf("Processing slide: %s", slide_name))
+      slide_sf <- roi_df_to_sf(x, scale_factor = 1)
+      resolve_polygon_overlaps(slide_sf)
     }
+  )
 
-    # Resolve overlaps for this slide
-    resolved_sf <- resolve_polygon_overlaps(slide_sf)
+  if (return_format == "sf") {
+    resolved_slides <- dplyr::bind_rows(resolved_slides, .id = "slideName")
+  } else if (return_format == "df") {
 
-    # Store resolved result
-    resolved_slides[[slide_name]] <- resolved_sf
   }
 
-  # Combine all slides back together
-  if (length(resolved_slides) > 0) {
-    result <- dplyr::bind_rows(resolved_slides)
-    message(sprintf("Combined %d slides with %d total ROIs",
-                    length(resolved_slides), nrow(result)))
-    return(result)
-  } else {
-    message("No slides processed successfully")
-    return(NULL)
-  }
+  resolved_slides
 }
 
 #' Resolve overlaps between polygons by splitting them
@@ -331,7 +296,7 @@ create_splitting_line <- function(intersection_sf, two_polygon_sf) {
     path_edges <- shortest_path_network |>
       sfnetworks::activate("edges") |>
       sf::st_as_sf() |>
-      dplyr::arrange(.data$.tidygraph_edge_index)
+      dplyr::arrange(.tidygraph_edge_index)
 
     if (nrow(path_edges) == 0) {
       message("      No path found between touch points")
