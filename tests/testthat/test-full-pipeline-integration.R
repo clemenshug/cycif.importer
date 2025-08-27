@@ -19,13 +19,12 @@ test_that("complete pipeline works with example data", {
 
   # Run complete pipeline
   results <- cycif_pipeline(
-    data_dir = data_dir,
-    roi_dir = roi_dir,
-    gate_table_path = gate_file,
+    counts = data_dir,
+    rois = roi_dir,
+    gate_table = gate_file,
     output_dir = output_dir,
     sample_size = 1000,
-    sampling_mode = "all_cells",
-
+    sampling_mode = "all_cells"
   )
 
   expect_type(results, "list")
@@ -73,9 +72,9 @@ test_that("pipeline works with roi_only sampling", {
   output_dir <- tempdir()
 
   results <- cycif_pipeline(
-    data_dir = data_dir,
-    roi_dir = roi_dir,
-    gate_table_path = gate_file,
+    counts = data_dir,
+    rois = roi_dir,
+    gate_table = gate_file,
     output_dir = output_dir,
     sample_size = 500,
     sampling_mode = "roi_only"
@@ -96,9 +95,9 @@ test_that("pipeline works without gates", {
 
   expect_warning(
     results <- cycif_pipeline(
-      data_dir = data_dir,
-      roi_dir = roi_dir,
-      gate_table_path = NULL,  # No gates
+      counts = data_dir,
+      rois = roi_dir,
+      gate_table = NULL,  # No gates
       output_dir = output_dir,
       sample_size = 500
     ),
@@ -118,8 +117,8 @@ test_that("pipeline works with slide filter", {
   output_dir <- tempdir()
 
   results <- cycif_pipeline(
-    data_dir = data_dir,
-    roi_dir = roi_dir,
+    counts = data_dir,
+    rois = roi_dir,
     output_dir = output_dir,
     sample_size = 500,
     slide_filter = "LSP11060"  # Only process one slide
@@ -134,10 +133,10 @@ test_that("pipeline works with slide filter", {
 test_that("pipeline validates input directories", {
   expect_error(
     cycif_pipeline(
-      data_dir = "/nonexistent/path",
+      counts = "/nonexistent/path",
       output_dir = tempdir()
     ),
-    "Data directory does not exist"
+    "No --unmicst_cell.csv"
   )
 
   extdata_path <- system.file("extdata", package = "cycif.importer")
@@ -145,19 +144,19 @@ test_that("pipeline validates input directories", {
 
   expect_error(
     cycif_pipeline(
-      data_dir = data_dir,
-      roi_dir = "/nonexistent/path",
+      counts = data_dir,
+      rois = "/nonexistent/path",
       output_dir = tempdir()
     ),
-    "ROI directory.*does not exist"
+    "No ROI files found"
   )
 
   expect_error(
     cycif_pipeline(
-      data_dir = data_dir,
-      gate_table_path = "/nonexistent/file.csv",
+      counts = data_dir,
+      gate_table = "/nonexistent/file.csv",
       output_dir = tempdir()
     ),
-    "Gate table file.*does not exist"
+    "does not exist"
   )
 })

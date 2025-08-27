@@ -4,22 +4,19 @@
 \alias{resolve_polygon_overlaps}
 \title{Resolve overlaps between polygons by splitting them}
 \usage{
-resolve_polygon_overlaps(polygon_sf, max_iterations = 100)
+resolve_polygon_overlaps(polygon_df)
 }
 \arguments{
-\item{polygon_sf}{An sf object containing POLYGON geometries}
-
-\item{max_iterations}{Maximum number of iterations to prevent infinite loops
-(default 100)}
+\item{polygon_df}{A dataframe or sf object containing ROI polygons, like
+the output from \code{cycif_load_roi_data()}.}
 }
 \value{
 An sf object with overlaps resolved
 }
 \description{
 Takes a list of polygons and resolves pairwise overlaps by splitting the
-overlapping regions. Only handles cases where at most two polygons overlap
-(no three-way overlaps). The overlaps are resolved iteratively using
-Voronoi-based splitting lines.
+overlapping regions. Only handles cases where at most two polygons overlap.
+The overlaps are resolved iteratively using Voronoi-based splitting lines.
 }
 \examples{
 \dontrun{

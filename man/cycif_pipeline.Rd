@@ -5,11 +5,11 @@
 \title{Run Complete CyCIF Analysis Pipeline}
 \usage{
 cycif_pipeline(
-  data_dir,
-  roi_dir = data_dir,
-  gate_table_path = NULL,
-  slide_info_path = NULL,
-  roi_info_path = NULL,
+  counts,
+  rois = NULL,
+  gate_table = NULL,
+  slide_info = NULL,
+  roi_info = NULL,
   output_dir,
   summary_filters = list(`PanCK+` = ~PanCKp, `PanCK-` = ~!PanCKp),
   summary_groups = list(by_roi = c("slideName", "ROI", "ROIname"), by_slide =
@@ -24,15 +24,20 @@ cycif_pipeline(
 )
 }
 \arguments{
-\item{data_dir}{Directory containing cell data files}
+\item{counts}{Either a directory path containing cell data files, or pre-loaded
+cell data as a list of data frames by slide name or single data frame with slideName column}
 
-\item{roi_dir}{Directory containing ROI files (defaults to \code{data_dir})}
+\item{rois}{Either a directory path containing ROI files, or pre-loaded
+ROI data as a data frame (defaults to \code{counts} if \code{counts} is a path)}
 
-\item{gate_table_path}{Path to gate table CSV file (optional)}
+\item{gate_table}{Either a path to gate table CSV file, or pre-loaded
+gate table data frame (optional)}
 
-\item{slide_info_path}{Path to slide metadata CSV file (optional)}
+\item{slide_info}{Either a path to slide metadata CSV file, or pre-loaded
+slide metadata data frame (optional)}
 
-\item{roi_info_path}{Path to ROI metadata CSV file (optional)}
+\item{roi_info}{Either a path to ROI metadata CSV file, or pre-loaded
+ROI metadata data frame (optional)}
 
 \item{output_dir}{Directory to save results}
 
@@ -65,21 +70,30 @@ List with analysis results (also saves files to \code{output_dir})
 }
 \description{
 Runs the complete CyCIF analysis pipeline from data loading through
-result saving.
+result saving. Accepts either file paths or pre-loaded data for maximum flexibility.
 }
 \examples{
 \dontrun{
-# Basic pipeline run
-results <- run_complete_pipeline(
-  data_dir = "/path/to/data",
+# Basic pipeline run with file paths
+results <- cycif_pipeline(
+  counts = "/path/to/data",
   output_dir = "/path/to/output"
 )
 
-# Advanced pipeline with custom parameters
-results <- run_complete_pipeline(
-  data_dir = "/path/to/data",
-  roi_dir = "/path/to/rois",
-  gate_table_path = "/path/to/gates.csv",
+# Pipeline with pre-loaded data
+cell_data <- cycif_load_cell_data("/path/to/data")
+roi_data <- cycif_load_roi_data("/path/to/rois")
+results <- cycif_pipeline(
+  counts = cell_data,
+  rois = roi_data,
+  output_dir = "/path/to/output"
+)
+
+# Mixed approach - some paths, some pre-loaded data
+results <- cycif_pipeline(
+  counts = "/path/to/data",
+  rois = my_roi_dataframe,
+  gate_table = "/path/to/gates.csv",
   output_dir = "/path/to/output",
   summary_filters = list("CD8+" = ~CD8ap, "CD4+" = ~CD4p),
   sample_size = 25000,

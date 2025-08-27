@@ -328,3 +328,78 @@ roi_df_to_sf <- function(roi_data, scale_factor = 1.0) {
 
   return(roi_sf)
 }
+
+#' Plot ROI sf polygons with ggplot2
+#'
+#' Creates a visualization of ROI polygons using ggplot2's geom_sf().
+#' Each ROI gets a different color and is labeled with its ID at the centroid.
+#' Separate facets are created for each slide.
+#'
+#' @param roi_sf sf object containing ROI polygons, typically output from
+#'   roi_df_to_sf(). Must contain a 'slideName' column for faceting
+#' @param label_column Character string specifying which column to use for
+#'   labels. Default is "Name" but could be "Id" or other identifier columns
+#'
+#' @return ggplot object
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Load ROI data and convert to sf
+#' extdata_path <- system.file("extdata", package = "cycif.importer")
+#' roi_dir <- file.path(extdata_path, "example_rois")
+#' roi_data <- cycif_load_roi_data(roi_dir, c("LSP11060", "LSP11064"))
+#' roi_sf <- roi_df_to_sf(roi_data)
+#'
+#' # Plot the ROIs
+#' plot_roi_sf(roi_sf)
+#' }
+plot_roi_sf <- function(roi_sf, label_column = "Name") {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop(paste0("Package 'ggplot2' is required for plotting. ",
+                "Please install it with: install.packages('ggplot2')"))
+  }
+
+  if (!inherits(roi_sf, "sf")) {
+    stop(paste0("roi_sf must be an sf object. Use roi_df_to_sf() to convert ",
+                "ROI data to sf format."))
+  }
+
+  if (!"slideName" %in% names(roi_sf)) {
+    stop(paste0("roi_sf must contain a 'slideName' column for faceting. ",
+                "Add this column before plotting."))
+  }
+
+  if (!label_column %in% names(roi_sf)) {
+    stop(sprintf("Label column '%s' not found in roi_sf. Available columns: %s",
+                 label_column, paste(names(roi_sf), collapse = ", ")))
+  }
+
+  # Create the plot
+  p <- ggplot2::ggplot(roi_sf) +
+    ggplot2::geom_sf(ggplot2::aes(fill = factor(!!rlang::sym(label_column))),
+                     alpha = 0.7,
+                     color = "black",
+                     size = 0.5) +
+    ggplot2::geom_sf_label(ggplot2::aes(label = !!rlang::sym(label_column)),
+                           size = 3,
+                           alpha = 0.8) +
+    ggplot2::facet_wrap(~slideName) +
+    ggplot2::scale_fill_viridis_d(name = "ROI") +
+    ggplot2::guides(fill = "none") +
+    ggplot2::theme_minimal() +
+    ggplot2::theme(
+      axis.text = ggplot2::element_blank(),
+      axis.ticks = ggplot2::element_blank(),
+      panel.grid = ggplot2::element_blank(),
+      strip.text = ggplot2::element_text(size = 12, face = "bold")
+    ) +
+    ggplot2::labs(
+      title = "ROI Polygons by Slide",
+      subtitle = sprintf("ROIs labeled by %s", label_column),
+      x = NULL,
+      y = NULL
+    )
+
+  return(p)
+}

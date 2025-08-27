@@ -1,13 +1,18 @@
 #' Run Complete CyCIF Analysis Pipeline
 #'
 #' Runs the complete CyCIF analysis pipeline from data loading through
-#' result saving.
+#' result saving. Accepts either file paths or pre-loaded data for maximum flexibility.
 #'
-#' @param data_dir Directory containing cell data files
-#' @param roi_dir Directory containing ROI files (defaults to `data_dir`)
-#' @param gate_table_path Path to gate table CSV file (optional)
-#' @param slide_info_path Path to slide metadata CSV file (optional)
-#' @param roi_info_path Path to ROI metadata CSV file (optional)
+#' @param counts Either a directory path containing cell data files, or pre-loaded
+#'   cell data as a list of data frames by slide name or single data frame with slideName column
+#' @param rois Either a directory path containing ROI files, or pre-loaded
+#'   ROI data as a data frame (defaults to `counts` if `counts` is a path)
+#' @param gate_table Either a path to gate table CSV file, or pre-loaded
+#'   gate table data frame (optional)
+#' @param slide_info Either a path to slide metadata CSV file, or pre-loaded
+#'   slide metadata data frame (optional)
+#' @param roi_info Either a path to ROI metadata CSV file, or pre-loaded
+#'   ROI metadata data frame (optional)
 #' @param output_dir Directory to save results
 #' @param summary_filters Named list of formula expressions for creating
 #'   stratified summaries. Default creates PanCK+/- summaries.
@@ -30,17 +35,26 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Basic pipeline run
-#' results <- run_complete_pipeline(
-#'   data_dir = "/path/to/data",
+#' # Basic pipeline run with file paths
+#' results <- cycif_pipeline(
+#'   counts = "/path/to/data",
 #'   output_dir = "/path/to/output"
 #' )
 #'
-#' # Advanced pipeline with custom parameters
-#' results <- run_complete_pipeline(
-#'   data_dir = "/path/to/data",
-#'   roi_dir = "/path/to/rois",
-#'   gate_table_path = "/path/to/gates.csv",
+#' # Pipeline with pre-loaded data
+#' cell_data <- cycif_load_cell_data("/path/to/data")
+#' roi_data <- cycif_load_roi_data("/path/to/rois")
+#' results <- cycif_pipeline(
+#'   counts = cell_data,
+#'   rois = roi_data,
+#'   output_dir = "/path/to/output"
+#' )
+#'
+#' # Mixed approach - some paths, some pre-loaded data
+#' results <- cycif_pipeline(
+#'   counts = "/path/to/data",
+#'   rois = my_roi_dataframe,
+#'   gate_table = "/path/to/gates.csv",
 #'   output_dir = "/path/to/output",
 #'   summary_filters = list("CD8+" = ~CD8ap, "CD4+" = ~CD4p),
 #'   sample_size = 25000,
@@ -48,11 +62,11 @@
 #' )
 #' }
 cycif_pipeline <- function(
-  data_dir,
-  roi_dir = data_dir,
-  gate_table_path = NULL,
-  slide_info_path = NULL,
-  roi_info_path = NULL,
+  counts,
+  rois = NULL,
+  gate_table = NULL,
+  slide_info = NULL,
+  roi_info = NULL,
   output_dir,
   summary_filters = list(`PanCK+` = ~PanCKp, `PanCK-` = ~!PanCKp),
   summary_groups = list(
@@ -71,47 +85,46 @@ cycif_pipeline <- function(
 
   message("Starting complete CyCIF pipeline...")
 
-  # Validate input
-  if (!dir.exists(data_dir)) {
-    stop("Data directory does not exist")
-  }
-  if (!dir.exists(roi_dir)) {
-    stop(sprintf("ROI directory \"%s\" does not exist", roi_dir))
-  }
-  if (!is.null(gate_table_path) && !file.exists(gate_table_path)) {
-    stop(sprintf("Gate table file \"%s\" does not exist", gate_table_path))
-  }
-  if (!is.null(slide_info_path) && !file.exists(slide_info_path)) {
-    stop(sprintf("Slide info file \"%s\" does not exist", slide_info_path))
-  }
-  if (!is.null(roi_info_path) && !file.exists(roi_info_path)) {
-    stop(sprintf("ROI info file \"%s\" does not exist", roi_info_path))
-  }
-
-  message("Loading data...")
-  cell_data <- cycif_load_cell_data(
-    data_dir,
-    slide_filter = slide_filter
+  # Load or use provided cell data
+  cell_data <- resolve_input_data(
+    counts,
+    cycif_load_cell_data,
+    list(slide_filter = slide_filter),
+    "cell data"
   )
 
-  message("Loading ROI data...")
-  roi_data <- cycif_load_roi_data(roi_dir, names(cell_data))
+  # Handle ROI data - default to counts path if rois is NULL and counts is a path
+  if (is.null(rois) && is.character(counts)) {
+    rois <- counts
+  }
+  roi_data <- resolve_input_data(
+    rois,
+    function(path) cycif_load_roi_data(path, names(cell_data)),
+    list(),
+    "ROI data"
+  )
 
   # Load metadata tables
-  gate_thresholds <- NULL
-  if (!is.null(gate_table_path)) {
-    gate_thresholds <- readr::read_csv(gate_table_path, show_col_types = FALSE)
-  }
+  gate_thresholds <- resolve_input_data(
+    gate_table,
+    function(path) readr::read_csv(path, show_col_types = FALSE),
+    list(),
+    "gate table"
+  )
 
-  slide_metadata <- NULL
-  if (!is.null(slide_info_path)) {
-    slide_metadata <- readr::read_csv(slide_info_path, show_col_types = FALSE)
-  }
+  slide_metadata <- resolve_input_data(
+    slide_info,
+    function(path) readr::read_csv(path, show_col_types = FALSE),
+    list(),
+    "slide metadata"
+  )
 
-  roi_metadata <- NULL
-  if (!is.null(roi_info_path)) {
-    roi_metadata <- readr::read_csv(roi_info_path, show_col_types = FALSE)
-  }
+  roi_metadata <- resolve_input_data(
+    roi_info,
+    function(path) readr::read_csv(path, show_col_types = FALSE),
+    list(),
+    "ROI metadata"
+  )
 
   message("Assigning cells to ROIs...")
   cell_data_roi <- cycif_assign_rois(

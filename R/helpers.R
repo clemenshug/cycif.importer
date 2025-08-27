@@ -151,6 +151,39 @@ add_roi_metadata <- function(data, roi_metadata) {
   )
 }
 
+#' Resolve input data from either path or pre-loaded data
+#'
+#' Flexible helper function that accepts either file paths or pre-loaded data
+#' and returns the appropriate data structure. This allows pipeline functions
+#' to work with both file-based and in-memory workflows.
+#'
+#' @param input Either a file/directory path (character) or pre-loaded data
+#' @param loader_func Function to use for loading from path (e.g., cycif_load_cell_data)
+#' @param loader_args List of additional arguments to pass to loader_func
+#' @param data_type Character string describing the data type for error messages
+#'
+#' @return Loaded or validated data structure
+#' @keywords internal
+resolve_input_data <- function(input, loader_func, loader_args = list(), data_type = "data") {
+  if (is.null(input)) {
+    return(NULL)
+  }
+  
+  if (is.character(input) && length(input) == 1) {
+    # Input is a path - load using the provided loader function
+    message(sprintf("Loading %s from path: %s", data_type, input))
+    do.call(loader_func, c(list(input), loader_args))
+  } else {
+    # Input is pre-loaded data - validate and return
+    if (is.data.frame(input) || (is.list(input) && !is.data.frame(input))) {
+      message(sprintf("Using pre-loaded %s", data_type))
+      input
+    } else {
+      stop(sprintf("Invalid %s input: must be a file path, data frame, or list of data frames", data_type))
+    }
+  }
+}
+
 #' Convert logical columns to numeric (for saving)
 #'
 #' @param df Data frame with potential logical columns
