@@ -85,12 +85,11 @@ cycif_load_roi_data <- function(roi_dir, slide_names = NULL) {
 
     message(sprintf("Loading ROIs for %s...", slide_name))
     rois <- readr::read_csv(roi_file, show_col_types = FALSE)
-    rois$slideName <- slide_name
     roi_data[[slide_name]] <- rois
   }
 
   if (length(roi_data) > 0) {
-    return(bind_rows(roi_data))
+    return(bind_rows(roi_data, .id = "slideName"))
   } else {
     return(NULL)
   }

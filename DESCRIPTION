@@ -23,7 +23,9 @@ Imports:
     rlang,
     purrr,
     powerjoin,
-    sf
+    sf,
+    sfnetworks,
+    lwgeom
 Suggests:
     testthat (>= 3.0.0),
     knitr,

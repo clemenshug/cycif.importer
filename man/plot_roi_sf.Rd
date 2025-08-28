@@ -27,10 +27,7 @@ Separate facets are created for each slide.
 extdata_path <- system.file("extdata", package = "cycif.importer")
 roi_dir <- file.path(extdata_path, "example_rois")
 roi_data <- cycif_load_roi_data(roi_dir, c("LSP11060", "LSP11064"))
-roi_sf <- roi_df_to_sf(roi_data$LSP11060)
-
-# Add slideName column for faceting
-roi_sf$slideName <- "LSP11060"
+roi_sf <- roi_df_to_sf(roi_data)
 
 # Plot the ROIs
 plot_roi_sf(roi_sf)

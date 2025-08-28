@@ -8,7 +8,9 @@ cycif_assign_rois(
   cell_data,
   roi_data = NULL,
   scale_factor = 0.65,
-  expand_distance = 50
+  expand_distance = 50,
+  roi_priority = NULL,
+  check_overlaps = FALSE
 )
 }
 \arguments{
@@ -22,6 +24,13 @@ slideName, or list of dataframes by slide}
 
 \item{expand_distance}{Distance in microns to expand ROIs (default 50, set
 to 0 to disable)}
+
+\item{roi_priority}{Character vector of ROI names in order of priority
+(first trumps later). When a cell overlaps multiple ROIs, assigns the
+ROI with highest priority. If NULL, assigns first overlapping ROI.}
+
+\item{check_overlaps}{Logical. If TRUE, analyzes ROI overlaps before
+assignment and provides recommendations. Default FALSE.}
 }
 \value{
 List of dataframes by slide name with ROI assignments

@@ -177,11 +177,18 @@ csv_data <- paste(
 )
 
 roi_sf <- read.csv(text = csv_data, stringsAsFactors = FALSE) %>%
-  roi_df_to_sf()
+  roi_df_to_sf() %>%
+  mutate(
+    slideName = "Test"
+  )
+
+plot_roi_sf(roi_sf)
 
 resolved <- resolve_polygon_overlaps(
   roi_sf
 )
+
+plot_roi_sf(resolved)
 
 csv_data <- "Id,Name,Text,type,all_points,X,Y,RadiusX,RadiusY,Width,Height,all_transforms\n1,Polygon1,Polygon1,Polygon,\"35.79,240.02 227.56,397.67 227.56,555.31 259.32,641.19 312.26,717.67 293.44,751.78 227.56,780.02 59.32,688.25 0.5,489.43 0.5,376.49 35.79,240.02\",-1,-1,-1,-1,-1,-1,-1\n2,Polygon2,Polygon2,Polygon,\"251.09,258.15 211.09,351.09 200.78,406.27 213.44,482.85 208.74,559.32 225.94,606.38 316.97,606.38 498.42,629.91 526.38,306.38 418.15,87.56 662.85,42.85 509.91,0.5 273.44,5.21 179.32,40.5 179.32,162.85 251.09,258.15\",-1,-1,-1,-1,-1,-1,-1"
 

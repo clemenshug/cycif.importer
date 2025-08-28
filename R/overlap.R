@@ -129,33 +129,44 @@ resolve_polygon_overlaps <- function(polygon_df) {
   ))
 
   # Find all overlapping pairs once
-  overlap_pairs <- find_polygon_overlaps(polygon_sf)
+  overlaps <- find_polygon_overlaps(polygon_sf) |>
+    dplyr::rowwise() |>
+    dplyr::mutate(
+      reason = {
+        if (length(origins) > 2) {
+          "Three-way or higher-order overlap."
+        } else if (any(proportions_input[[1]] > 0.5)) {
+          "Overlap too large to resolve cleanly."
+        } else {
+          NA_character_
+        }
+      }
+    ) |>
+    dplyr::ungroup()
 
-  if (length(overlap_pairs) == 0) {
+  if (nrow(overlaps) == 0) {
     message("No overlaps found")
     return(polygon_sf)
   }
 
-  message(sprintf("Found %d overlapping pairs to resolve", length(overlap_pairs)))
+  not_resolvable <- overlaps |>
+    tidyr::drop_na(reason)
+
+  resolvable <- overlaps |>
+    dplyr::filter(is.na(reason))
+
+  message(sprintf("Found %d overlapping pairs to resolve", nrow(resolvable)))
 
   # Process each overlapping pair
-  for (pair_idx in seq_along(overlap_pairs)) {
-    pair_indices <- overlap_pairs[[pair_idx]]
-
-    # Check that each overlap involves exactly two polygons
-    if (length(pair_indices) != 2) {
-      stop(sprintf(
-        "Overlap %d involves %d polygons, but only pairwise overlaps (2 polygons) are supported. Three-way or higher-order overlaps detected.",
-        pair_idx, length(pair_indices)
-      ))
-    }
+  for (pair_idx in seq_along(resolvable$origins)) {
+    pair_indices <- resolvable$origins[[pair_idx]]
 
     i <- pair_indices[1]
     j <- pair_indices[2]
 
     message(sprintf(
       "Processing pair %d/%d: Resolving overlap between polygons %d and %d",
-      pair_idx, length(overlap_pairs), i, j
+      pair_idx, nrow(resolvable), i, j
     ))
 
     # Resolve this pairwise overlap
@@ -168,6 +179,19 @@ resolve_polygon_overlaps <- function(polygon_df) {
 
   message("Overlap resolution complete")
 
+  if (nrow(not_resolvable) > 0) {
+    warning(sprintf(
+      "%d overlaps could not be resolved:\n%s",
+      nrow(not_resolvable),
+      paste(
+        sprintf(" - Polygons %s: %s",
+                purrr::map_chr(not_resolvable$origins, \(x) paste(x, collapse = ", ")),
+                not_resolvable$reason),
+        collapse = "\n"
+      )
+    ))
+  }
+
   return(polygon_sf)
 }
 
@@ -176,27 +200,32 @@ resolve_polygon_overlaps <- function(polygon_df) {
 #'
 #' @param polygon_sf An sf object with polygon geometries
 #'
-#' @return A list of numeric vectors, each containing indices of overlapping polygon pairs
+#' @return An sf dataframe with intersection geometries and area columns
 #' @keywords internal
 find_polygon_overlaps <- function(polygon_sf) {
-  # Find overlaps using sparse matrix
-  overlaps_sparse <- sf::st_overlaps(polygon_sf, sparse = TRUE)
+  intersections <- suppressWarnings(sf::st_intersection(polygon_sf)) |>
+    dplyr::filter(
+      purrr::map_lgl(origins, \(x) length(x) > 1)
+    ) |>
+    dplyr::mutate(
+      area_intersection = sf::st_area(geometry)
+    )
 
-  overlap_pairs <- list()
-
-  # Convert sparse matrix to pairs, avoiding duplicates
-  for (i in seq_len(length(overlaps_sparse))) {
-    overlapping_indices <- overlaps_sparse[[i]]
-
-    # Only consider indices greater than i to avoid duplicates
-    overlapping_indices <- overlapping_indices[overlapping_indices > i]
-
-    for (j in overlapping_indices) {
-      overlap_pairs <- append(overlap_pairs, list(c(i, j)))
-    }
+  if (nrow(intersections) == 0) {
+    return(NULL)
   }
 
-  return(overlap_pairs)
+  input_areas <- sf::st_area(polygon_sf)
+  result <- intersections |>
+    dplyr::mutate(
+      area_inputs = purrr::map(origins, \(x) input_areas[x]),
+      proportions_input = purrr::map2(
+        area_intersection, area_inputs,
+        \(area_int, area_in) area_int / area_in
+      )
+    )
+
+  return(result)
 }
 
 
@@ -223,6 +252,7 @@ resolve_pairwise_overlap <- function(two_polygon_sf) {
   target_intersection <- intersection[
     purrr::map_lgl(intersection$origins, \(x) length(x) == 2 && all(x %in% c(1L, 2L))),
   ] |>
+    cast_quiet("MULTIPOLYGON") |>
     cast_quiet("POLYGON")
 
   if (nrow(target_intersection) == 0) {

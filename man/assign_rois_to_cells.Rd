@@ -4,7 +4,7 @@
 \alias{assign_rois_to_cells}
 \title{Assign ROIs to cells based on polygon coordinates}
 \usage{
-assign_rois_to_cells(data, roi_data, scale_factor)
+assign_rois_to_cells(data, roi_data, scale_factor, roi_priority = NULL)
 }
 \arguments{
 \item{data}{Data frame with cell coordinates}
@@ -12,6 +12,9 @@ assign_rois_to_cells(data, roi_data, scale_factor)
 \item{roi_data}{Sf geometry data frame with ROI polygons}
 
 \item{scale_factor}{Scale factor for coordinate conversion}
+
+\item{roi_priority}{Character vector of ROI names in order of priority
+for resolving overlaps. If NULL, assigns first overlapping ROI.}
 }
 \value{
 Data frame with ROI assignments added

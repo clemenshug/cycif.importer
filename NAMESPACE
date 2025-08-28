@@ -2,6 +2,7 @@
 
 export(add_roi_metadata)
 export(add_slide_metadata)
+export(analyze_roi_overlaps)
 export(apply_double_gates)
 export(apply_single_gates)
 export(cycif_apply_gates)

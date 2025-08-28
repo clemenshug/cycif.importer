@@ -10,7 +10,7 @@ find_polygon_overlaps(polygon_sf)
 \item{polygon_sf}{An sf object with polygon geometries}
 }
 \value{
-A list of numeric vectors, each containing indices of overlapping polygon pairs
+An sf dataframe with intersection geometries and area columns
 }
 \description{
 Find all overlapping polygon pairs
