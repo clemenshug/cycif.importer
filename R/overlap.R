@@ -135,7 +135,7 @@ resolve_polygon_overlaps <- function(polygon_df) {
       reason = {
         if (length(origins) > 2) {
           "Three-way or higher-order overlap."
-        } else if (any(proportions_input[[1]] > 0.5)) {
+        } else if (any(proportions_input > 0.5)) {
           "Overlap too large to resolve cleanly."
         } else {
           NA_character_
@@ -205,14 +205,16 @@ resolve_polygon_overlaps <- function(polygon_df) {
 find_polygon_overlaps <- function(polygon_sf) {
   intersections <- suppressWarnings(sf::st_intersection(polygon_sf)) |>
     dplyr::filter(
-      purrr::map_lgl(origins, \(x) length(x) > 1)
+      purrr::map_lgl(origins, \(x) length(x) > 1),
+      # only keep intersections that are polygons
+      sf::st_geometry_type(geometry) %in% c("POLYGON", "MULTIPOLYGON")
     ) |>
     dplyr::mutate(
       area_intersection = sf::st_area(geometry)
     )
 
   if (nrow(intersections) == 0) {
-    return(NULL)
+    return(data.frame())
   }
 
   input_areas <- sf::st_area(polygon_sf)

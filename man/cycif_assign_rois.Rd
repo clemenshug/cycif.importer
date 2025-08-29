@@ -10,7 +10,7 @@ cycif_assign_rois(
   scale_factor = 0.65,
   expand_distance = 50,
   roi_priority = NULL,
-  check_overlaps = FALSE
+  check_overlaps = TRUE
 )
 }
 \arguments{
@@ -29,8 +29,8 @@ to 0 to disable)}
 (first trumps later). When a cell overlaps multiple ROIs, assigns the
 ROI with highest priority. If NULL, assigns first overlapping ROI.}
 
-\item{check_overlaps}{Logical. If TRUE, analyzes ROI overlaps before
-assignment and provides recommendations. Default FALSE.}
+\item{check_overlaps}{If TRUE, analyzes ROI overlaps before
+assignment and provides recommendations.}
 }
 \value{
 List of dataframes by slide name with ROI assignments

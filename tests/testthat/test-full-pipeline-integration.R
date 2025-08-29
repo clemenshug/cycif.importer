@@ -160,3 +160,31 @@ test_that("pipeline validates input directories", {
     "does not exist"
   )
 })
+
+test_that("pipeline works with roi_priority parameter", {
+  skip_if_not_installed("readr")
+
+  extdata_path <- system.file("extdata", package = "cycif.importer")
+  data_dir <- file.path(extdata_path, "example_quants")
+  roi_dir <- file.path(extdata_path, "example_rois")
+  output_dir <- tempdir()
+
+  # Run pipeline with roi_priority specified
+  results <- cycif_pipeline(
+    counts = data_dir,
+    rois = roi_dir,
+    output_dir = output_dir,
+    sample_size = 500,
+    roi_priority = c("Tumor", "Stroma", "Other")  # Example priority order
+  )
+
+  # Should run without error and return expected structure
+  expect_type(results, "list")
+  expect_true("all_cells" %in% names(results))
+  expect_true("sampled_cells" %in% names(results))
+
+  # Check that ROI assignments were made
+  first_slide <- results$all_cells[[1]]
+  expect_true("ROI" %in% names(first_slide))
+  expect_true("ROIname" %in% names(first_slide))
+})

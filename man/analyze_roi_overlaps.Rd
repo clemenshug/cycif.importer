@@ -4,23 +4,13 @@
 \alias{analyze_roi_overlaps}
 \title{Analyze ROI overlaps and provide recommendations}
 \usage{
-analyze_roi_overlaps(
-  roi_data,
-  scale_factor = 0.65,
-  warn_threshold = 0.5,
-  message_level = c("info", "warning", "error")
-)
+analyze_roi_overlaps(roi_data)
 }
 \arguments{
 \item{roi_data}{Data frame with ROI polygon definitions or list by slide}
 
-\item{scale_factor}{Scale factor for converting pixel coordinates to microns
-(default 0.65)}
-
 \item{warn_threshold}{Threshold for considering overlaps as "large"
 (default 0.5 = 50\% of parent ROI area)}
-
-\item{message_level}{Level of console output: "info", "warning", or "error"}
 }
 \value{
 List with summary statistics, detailed overlap information, and

@@ -13,8 +13,8 @@
 #' @param roi_priority Character vector of ROI names in order of priority
 #'   (first trumps later). When a cell overlaps multiple ROIs, assigns the
 #'   ROI with highest priority. If NULL, assigns first overlapping ROI.
-#' @param check_overlaps Logical. If TRUE, analyzes ROI overlaps before
-#'   assignment and provides recommendations. Default FALSE.
+#' @param check_overlaps If TRUE, analyzes ROI overlaps before
+#'   assignment and provides recommendations.
 #'
 #' @return List of dataframes by slide name with ROI assignments
 #' @export
@@ -36,7 +36,7 @@ cycif_assign_rois <- function(
   scale_factor = 0.65,
   expand_distance = 50,
   roi_priority = NULL,
-  check_overlaps = FALSE
+  check_overlaps = TRUE
 ) {
   # Standardize input data
   slide_list <- standardize_input_data(cell_data)
@@ -46,16 +46,49 @@ cycif_assign_rois <- function(
   message(sprintf("Processing %d slides: %s", length(slide_names), paste(slide_names, collapse = ", ")))
 
   # Check for ROI overlaps if requested
-  if (check_overlaps && !is.null(roi_data)) {
+  overlap_analysis <- if (check_overlaps && !is.null(roi_data)) {
     message("Analyzing ROI overlaps...")
-    overlap_analysis <- analyze_roi_overlaps(roi_data, scale_factor, message_level = "warning")
+    analyze_roi_overlaps(roi_data)
+  } else {
+    list(details = data.frame())
+  }
+  if (nrow(overlap_analysis$details) > 0) {
+    solvable_issues <- if (!is.null(roi_priority))
+      c("large_overlap", "fully_contained")
+    else
+      character(0)
 
-    # Check if any critical issues were found
-    summary_df <- overlap_analysis$summary
-    critical_issues <- any(summary_df$multiway_overlaps > 0 | summary_df$large_overlaps > 0 | summary_df$containment_cases > 0)
+    unsolvable_issues <- overlap_analysis$details |>
+      filter(!issue %in% solvable_issues)
 
-    if (critical_issues && is.null(roi_priority)) {
-      stop("Critical ROI overlaps detected but no roi_priority provided. Please review overlap analysis and provide roi_priority parameter or resolve overlaps first.")
+    n_issues <- nrow(unsolvable_issues)
+    if (n_issues > 0) {
+      solutions <- c(
+        "multiway_overlap" = "Multiway overlap issues must be solved by redrawing ROIs manually such that they no longer overlap.",
+        "large_overlap" = "Large overlap issues must be resolved by either redrawing ROIs manually or by providing a `roi_priority` list, which defines which type of ROI will take precedence in case of overlap.",
+        "fully_contained" = "Fully contained ROIs are often the result of more specific ROIs being contained within larger less specific ROIs. These issues can be resolved by providing a `roi_priority` list, which defines the order of precedence for overlapping ROIs.",
+        "small_overlap" = "Small overlap issues are often the result of imprecise drawing of neighboring ROIs and can be resolved by running the `resolve_roi_overlaps()` function prior to running the `cycif.importer` pipeline."
+      )
+      stop(
+        sprintf(
+          "Found %d unsolvable ROI overlap issues:\n%s\nPotential solutions:\n%s",
+          n_issues,
+          with(
+            unsolvable_issues,
+            paste(
+              sprintf("  %s - ROIs %d, %d %s: %s", slideName, purrr::map_int(origins, 1L), purrr::map_int(origins, 2L), issue, issue_message),
+              collapse = "\n"
+            )
+          ),
+          paste(
+            purrr::map_chr(
+              unique(unsolvable_issues$issue),
+              \(x) sprintf(" - %s: %s", x, solutions[[x]])
+            ),
+            collapse = "\n"
+          )
+        )
+      )
     }
   }
 
@@ -455,12 +488,9 @@ plot_roi_sf <- function(roi_sf, label_column = "Name") {
 #' with specific recommendations for handling conflicts during cell assignment.
 #'
 #' @param roi_data Data frame with ROI polygon definitions or list by slide
-#' @param scale_factor Scale factor for converting pixel coordinates to microns
-#'   (default 0.65)
 #' @param warn_threshold Threshold for considering overlaps as "large"
 #'   (default 0.5 = 50% of parent ROI area)
-#' @param message_level Level of console output: "info", "warning", or "error"
-#'
+
 #' @return List with summary statistics, detailed overlap information, and
 #'   recommendations for resolving conflicts
 #' @export
@@ -476,295 +506,74 @@ plot_roi_sf <- function(roi_sf, label_column = "Name") {
 #' # View detailed overlap information
 #' View(overlap_analysis$details)
 #' }
-analyze_roi_overlaps <- function(roi_data, scale_factor = 0.65,
-                                warn_threshold = 0.5,
-                                message_level = c("info", "warning", "error")) {
-
-  message_level <- match.arg(message_level)
-
+analyze_roi_overlaps <- function(roi_data) {
   # Standardize input data to list by slide
   roi_by_slide <- standardize_input_data(roi_data)
-
-  if (is.null(roi_by_slide) || length(roi_by_slide) == 0) {
-    return(list(
-      summary = data.frame(
-        slide = character(0),
-        total_rois = integer(0),
-        overlapping_pairs = integer(0),
-        small_overlaps = integer(0),
-        large_overlaps = integer(0),
-        multiway_overlaps = integer(0),
-        containment_cases = integer(0),
-        recommendation = character(0)
-      ),
-      details = data.frame(
-        slide = character(0),
-        roi_1 = character(0),
-        roi_2 = character(0),
-        overlap_area = numeric(0),
-        roi_1_area = numeric(0),
-        roi_2_area = numeric(0),
-        overlap_pct_roi_1 = numeric(0),
-        overlap_pct_roi_2 = numeric(0),
-        max_overlap_pct = numeric(0),
-        overlap_type = character(0),
-        recommendation = character(0)
-      ),
-      messages = character(0)
-    ))
-  }
 
   # Initialize result structures
   summary_list <- list()
   details_list <- list()
-  all_messages <- character(0)
 
   # Process each slide
   for (slide_name in names(roi_by_slide)) {
     slide_roi_data <- roi_by_slide[[slide_name]]
-
-    if (is.null(slide_roi_data) || nrow(slide_roi_data) == 0) {
-      next
-    }
-
-    if (message_level == "info") {
-      message(sprintf("Analyzing ROI overlaps for slide: %s", slide_name))
-    }
-
-    # Convert to sf format
-    rois_sf <- roi_df_to_sf(slide_roi_data, scale_factor)
-
-    if (is.null(rois_sf) || nrow(rois_sf) == 0) {
-      next
-    }
-
+    rois_sf <- roi_df_to_sf(slide_roi_data, scale_factor = 1)
     total_rois <- nrow(rois_sf)
-
-    # Find overlaps using existing function
     overlaps <- find_polygon_overlaps(rois_sf)
-
-    if (is.null(overlaps) || nrow(overlaps) == 0) {
-      # No overlaps found
-      summary_list[[slide_name]] <- data.frame(
-        slide = slide_name,
-        total_rois = total_rois,
-        overlapping_pairs = 0L,
-        small_overlaps = 0L,
-        large_overlaps = 0L,
-        multiway_overlaps = 0L,
-        containment_cases = 0L,
-        recommendation = "No overlaps detected - proceed with standard ROI assignment"
-      )
-
-      if (message_level %in% c("info", "warning")) {
-        msg <- sprintf("  Slide %s: No overlaps found among %d ROIs", slide_name, total_rois)
-        message(msg)
-        all_messages <- c(all_messages, msg)
-      }
-
+    if (nrow(overlaps) == 0) {
       next
     }
+    overlaps <- overlaps |>
+      dplyr::rowwise() |>
+      dplyr::mutate(
+        issue = {
+          if (length(origins) > 2) {
+            c(
+              "multiway_overlap",
+              paste0("Multiway overlap between ROIs", paste(origins, collapse = ", "))
+            )
+          } else if (any(proportions_input > 0.95)) {
+            c(
+              "fully_contained",
+              paste0(
+                "ROI ", origins[which.max(proportions_input)],
+                " fully contained within ROI ", origins[which.min(proportions_input)]
+              )
+            )
+          } else if (any(proportions_input > 0.5)) {
+            c(
+              "large_overlap",
+              paste0(
+                "ROI ", origins[which.max(proportions_input)],
+                " overlaps to ", signif(max(proportions_input), 2) * 100, "% ",
+                "with ROI ", origins[which.min(proportions_input)]
+              )
+            )
+          } else {
+            c(
+              "small_overlap",
+              sprintf(
+                "ROI %d and %d have a small overlap of %s%% and %s%% with each other",
+                origins[1], origins[2],
+                signif(proportions_input[1], 2) * 100, signif(proportions_input[2], 2) * 100
+              )
+            )
+          }
+        } |>
+          rlang::set_names(c("issue", "issue_message")) |>
+          list()
+      ) |>
+      dplyr::ungroup() |>
+      tidyr::unnest_wider(issue)
 
-    # Analyze each overlap
-    slide_details <- data.frame(
-      slide = character(nrow(overlaps)),
-      roi_1 = character(nrow(overlaps)),
-      roi_2 = character(nrow(overlaps)),
-      overlap_area = numeric(nrow(overlaps)),
-      roi_1_area = numeric(nrow(overlaps)),
-      roi_2_area = numeric(nrow(overlaps)),
-      overlap_pct_roi_1 = numeric(nrow(overlaps)),
-      overlap_pct_roi_2 = numeric(nrow(overlaps)),
-      max_overlap_pct = numeric(nrow(overlaps)),
-      overlap_type = character(nrow(overlaps)),
-      recommendation = character(nrow(overlaps))
-    )
-
-    small_overlaps <- 0L
-    large_overlaps <- 0L
-    multiway_overlaps <- 0L
-    containment_cases <- 0L
-
-    for (i in seq_len(nrow(overlaps))) {
-      overlap_row <- overlaps[i, ]
-      roi_indices <- overlap_row$origins[[1]]
-      proportions <- overlap_row$proportions_input[[1]]
-
-      slide_details$slide[i] <- slide_name
-      slide_details$overlap_area[i] <- as.numeric(overlap_row$area_intersection)
-
-      # Handle different overlap patterns
-      if (length(roi_indices) > 2) {
-        # Multi-way overlap
-        multiway_overlaps <- multiway_overlaps + 1L
-        roi_names <- rois_sf$Name[roi_indices]
-        slide_details$roi_1[i] <- roi_names[1]
-        slide_details$roi_2[i] <- paste(roi_names[-1], collapse = ", ")
-        slide_details$roi_1_area[i] <- as.numeric(overlap_row$area_inputs[[1]][1])
-        slide_details$roi_2_area[i] <- NA_real_
-        slide_details$overlap_pct_roi_1[i] <- as.numeric(proportions[1])
-        slide_details$overlap_pct_roi_2[i] <- NA_real_
-        slide_details$max_overlap_pct[i] <- max(as.numeric(proportions))
-        slide_details$overlap_type[i] <- "multiway"
-        slide_details$recommendation[i] <- "Manual review required - multiple ROIs overlap at same location. Consider redesigning ROI boundaries"
-
-      } else {
-        # Pairwise overlap
-        roi_names <- rois_sf$Name[roi_indices]
-        slide_details$roi_1[i] <- roi_names[1]
-        slide_details$roi_2[i] <- roi_names[2]
-        slide_details$roi_1_area[i] <- as.numeric(overlap_row$area_inputs[[1]][1])
-        slide_details$roi_2_area[i] <- as.numeric(overlap_row$area_inputs[[1]][2])
-        slide_details$overlap_pct_roi_1[i] <- as.numeric(proportions[1])
-        slide_details$overlap_pct_roi_2[i] <- as.numeric(proportions[2])
-        slide_details$max_overlap_pct[i] <- max(as.numeric(proportions))
-
-        # Check for complete containment (one ROI >95% contained in another)
-        if (any(proportions > 0.95)) {
-          containment_cases <- containment_cases + 1L
-          slide_details$overlap_type[i] <- "containment"
-          slide_details$recommendation[i] <- "Provide roi_priority vector to handle nested ROI hierarchy (inner vs outer ROI precedence)"
-
-        } else if (slide_details$max_overlap_pct[i] >= warn_threshold) {
-          # Large overlap
-          large_overlaps <- large_overlaps + 1L
-          slide_details$overlap_type[i] <- "large"
-          slide_details$recommendation[i] <- "Provide roi_priority vector to specify which ROI takes precedence"
-
-        } else {
-          # Small overlap
-          small_overlaps <- small_overlaps + 1L
-          slide_details$overlap_type[i] <- "small"
-          slide_details$recommendation[i] <- "Run resolve_roi_overlaps() to automatically split overlapping regions"
-        }
-      }
-    }
-
-    # Generate summary
-    overlapping_pairs <- nrow(overlaps)
-    overall_recommendation <- generate_overall_recommendation(
-      small_overlaps, large_overlaps, multiway_overlaps, containment_cases
-    )
-
-    summary_list[[slide_name]] <- data.frame(
-      slide = slide_name,
-      total_rois = total_rois,
-      overlapping_pairs = overlapping_pairs,
-      small_overlaps = small_overlaps,
-      large_overlaps = large_overlaps,
-      multiway_overlaps = multiway_overlaps,
-      containment_cases = containment_cases,
-      recommendation = overall_recommendation
-    )
-
-    details_list[[slide_name]] <- slide_details
-
-    # Generate messages
-    if (message_level %in% c("info", "warning")) {
-      msg <- sprintf("  Slide %s: %d overlaps found among %d ROIs",
-                     slide_name, overlapping_pairs, total_rois)
-      message(msg)
-      all_messages <- c(all_messages, msg)
-
-      if (small_overlaps > 0) {
-        msg <- sprintf("    - %d small overlaps (<%d%% area)",
-                       small_overlaps, warn_threshold * 100)
-        message(msg)
-        all_messages <- c(all_messages, msg)
-      }
-
-      if (large_overlaps > 0) {
-        msg <- sprintf("    - %d large overlaps (>=%d%% area)",
-                       large_overlaps, warn_threshold * 100)
-        message(msg)
-        all_messages <- c(all_messages, msg)
-      }
-
-      if (multiway_overlaps > 0) {
-        msg <- sprintf("    - %d multi-way overlaps (3+ ROIs)", multiway_overlaps)
-        message(msg)
-        all_messages <- c(all_messages, msg)
-      }
-
-      if (containment_cases > 0) {
-        msg <- sprintf("    - %d containment cases (ROI inside another)", containment_cases)
-        message(msg)
-        all_messages <- c(all_messages, msg)
-      }
-
-      msg <- sprintf("    Recommendation: %s", overall_recommendation)
-      if (message_level == "warning" && (large_overlaps > 0 || multiway_overlaps > 0 || containment_cases > 0)) {
-        warning(msg)
-      } else {
-        message(msg)
-      }
-      all_messages <- c(all_messages, msg)
-    }
+    details_list[[slide_name]] <- overlaps
+    summary_list[[slide_name]] <- overlaps |>
+      dplyr::count(issue)
   }
 
-  # Combine results
-  if (length(summary_list) == 0) {
-    summary_df <- data.frame(
-      slide = character(0),
-      total_rois = integer(0),
-      overlapping_pairs = integer(0),
-      small_overlaps = integer(0),
-      large_overlaps = integer(0),
-      multiway_overlaps = integer(0),
-      containment_cases = integer(0),
-      recommendation = character(0)
-    )
-  } else {
-    summary_df <- do.call(rbind, summary_list)
-  }
-
-  if (length(details_list) == 0) {
-    details_df <- data.frame(
-      slide = character(0),
-      roi_1 = character(0),
-      roi_2 = character(0),
-      overlap_area = numeric(0),
-      roi_1_area = numeric(0),
-      roi_2_area = numeric(0),
-      overlap_pct_roi_1 = numeric(0),
-      overlap_pct_roi_2 = numeric(0),
-      max_overlap_pct = numeric(0),
-      overlap_type = character(0),
-      recommendation = character(0)
-    )
-  } else {
-    details_df <- do.call(rbind, details_list)
-    rownames(details_df) <- NULL
-  }
-
-  rownames(summary_df) <- NULL
 
   list(
-    summary = summary_df,
-    details = details_df,
-    messages = all_messages
+    summary = dplyr::bind_rows(summary_list, .id = "slideName"),
+    details = dplyr::bind_rows(details_list, .id = "slideName")
   )
-}
-
-#' Generate overall recommendation based on overlap analysis
-#'
-#' @param small_overlaps Number of small overlaps
-#' @param large_overlaps Number of large overlaps
-#' @param multiway_overlaps Number of multi-way overlaps
-#' @param containment_cases Number of containment cases
-#'
-#' @return Character string with overall recommendation
-#' @keywords internal
-generate_overall_recommendation <- function(small_overlaps, large_overlaps,
-                                          multiway_overlaps, containment_cases) {
-
-  if (multiway_overlaps > 0) {
-    return("Manual review required due to multi-way overlaps")
-  } else if (containment_cases > 0 || large_overlaps > 0) {
-    return("Provide roi_priority vector to resolve conflicts")
-  } else if (small_overlaps > 0) {
-    return("Run resolve_roi_overlaps() to automatically split overlapping regions")
-  } else {
-    return("No overlaps detected - proceed with standard ROI assignment")
-  }
 }

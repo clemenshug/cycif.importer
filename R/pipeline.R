@@ -28,6 +28,9 @@
 #' @param scale_factor Scale factor to convert pixels to microns (default 0.65)
 #' @param expand_distance Distance in microns to expand ROIs (default 50,
 #'   set to 0 to disable)
+#' @param roi_priority Character vector of ROI names in order of priority
+#'   (first trumps later). When a cell overlaps multiple ROIs, assigns the
+#'   ROI with highest priority. If NULL, assigns first overlapping ROI.
 #' @param slide_filter Optional vector of slide names to process
 #'
 #' @return List with analysis results (also saves files to `output_dir`)
@@ -80,6 +83,7 @@ cycif_pipeline <- function(
   double_gates = NULL,
   scale_factor = 0.65,
   expand_distance = 50,
+  roi_priority = NULL,
   slide_filter = NULL
 ) {
 
@@ -93,7 +97,7 @@ cycif_pipeline <- function(
     "cell data"
   )
 
-  # Handle ROI data - default to counts path if rois is NULL and counts is a path
+  # Handle ROI data - default to counts path if rois is NULL and counts is path
   if (is.null(rois) && is.character(counts)) {
     rois <- counts
   }
@@ -131,7 +135,8 @@ cycif_pipeline <- function(
     cell_data,
     roi_data = roi_data,
     scale_factor = scale_factor,
-    expand_distance = expand_distance
+    expand_distance = expand_distance,
+    roi_priority = roi_priority
   )
 
   # Use default double gates if none provided
@@ -226,6 +231,6 @@ cycif_pipeline <- function(
       all_cells = gated_data,
       sampled_cells = sampled_data
     ) |>
-     c(summarized_data)
+      c(summarized_data)
   )
 }

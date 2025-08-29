@@ -182,10 +182,79 @@ roi_sf <- read.csv(text = csv_data, stringsAsFactors = FALSE) %>%
     slideName = "Test"
   )
 
+generate_synthetic_cells <- function(roi_sf, n_cells = 1000) {
+  # Get the bounding box of all ROIs
+  bbox <- sf::st_bbox(roi_sf)
+
+  # Define marker names (from your example)
+  markers <- c("HLA-E", "p53", "CD20", "PanCK", "CD8a", "alpha-SMA", "CD68",
+               "HLA-A", "CD57", "HLA DR", "CD103", "CD11b", "CD3d", "PD1",
+               "LAG3", "CD45", "cGAS", "gH2Ax", "GZMB", "pSTAT1", "pTBK1",
+               "CD163", "CD45RO", "CD44", "pSTAT3", "CD4", "CD11c", "BANF1",
+               "Ki67", "FoxP3", "H3K27me3")
+
+  # Generate random cell positions within bounding box
+  set.seed(42) # for reproducibility
+  x_coords <- runif(n_cells, bbox[1], bbox[3])
+  y_coords <- runif(n_cells, bbox[2], bbox[4])
+
+  # Generate synthetic cell data
+  cell_data <- tibble(
+    CellID = seq_len(n_cells),
+    X_centroid = x_coords,
+    Y_centroid = y_coords
+  )
+
+  # Generate random marker intensities (log-normal distribution for realistic values)
+  for (marker in markers) {
+    # Parameters to generate values roughly in range 300-6000 like your examples
+    cell_data[[marker]] <- rlnorm(n_cells, meanlog = log(1200), sdlog = 0.6)
+  }
+
+  # Generate morphological features
+  cell_data <- cell_data %>%
+    mutate(
+      Area = rlnorm(n_cells, meanlog = log(120), sdlog = 0.3),
+      MajorAxisLength = Area^0.5 * runif(n_cells, 1.2, 2.0),
+      MinorAxisLength = Area^0.5 * runif(n_cells, 0.7, 1.2),
+      Eccentricity = runif(n_cells, 0.3, 0.9),
+      Solidity = runif(n_cells, 0.85, 0.98),
+      Extent = runif(n_cells, 0.55, 0.75),
+      Orientation = runif(n_cells, -pi/2, pi/2)
+    ) %>%
+    # Reorder columns to match your format
+    select(CellID, all_of(markers), X_centroid, Y_centroid, Area,
+           MajorAxisLength, MinorAxisLength, Eccentricity, Solidity, Extent, Orientation)
+
+  return(cell_data)
+}
+
+# Generate the synthetic cells
+synthetic_cells <- generate_synthetic_cells(roi_sf, n_cells = 2000) %>%
+  mutate(
+    slideName = "Test"
+  )
+
+res <- cycif_pipeline(
+  synthetic_cells,
+  rois = sf_to_roi_df(roi_sf),
+  summary_filters = NULL,
+  summary_groups = NULL,
+  output_dir = tempdir()
+)
+
 plot_roi_sf(roi_sf)
 
 resolved <- resolve_polygon_overlaps(
   roi_sf
+)
+
+res <- cycif_pipeline(
+  synthetic_cells,
+  rois = sf_to_roi_df(resolved),
+  summary_filters = NULL,
+  summary_groups = NULL,
+  output_dir = tempdir()
 )
 
 plot_roi_sf(resolved)

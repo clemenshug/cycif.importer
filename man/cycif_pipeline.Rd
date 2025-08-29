@@ -20,6 +20,7 @@ cycif_pipeline(
   double_gates = NULL,
   scale_factor = 0.65,
   expand_distance = 50,
+  roi_priority = NULL,
   slide_filter = NULL
 )
 }
@@ -62,6 +63,10 @@ uses default combinations. Example: \code{list(strange_cells = ~p53p & CD11cp)}}
 
 \item{expand_distance}{Distance in microns to expand ROIs (default 50,
 set to 0 to disable)}
+
+\item{roi_priority}{Character vector of ROI names in order of priority
+(first trumps later). When a cell overlaps multiple ROIs, assigns the
+ROI with highest priority. If NULL, assigns first overlapping ROI.}
 
 \item{slide_filter}{Optional vector of slide names to process}
 }
