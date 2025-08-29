@@ -1,3 +1,6 @@
+cycif.importer
+================
+Clemens Hug
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
@@ -74,9 +77,9 @@ output_dir <- tempdir()
 
 # Run the complete pipeline
 results <- cycif_pipeline(
-  data_dir = data_dir,
-  roi_dir = roi_dir,
-  gate_table_path = gate_file,
+  counts = data_dir,
+  rois = roi_dir,
+  gate_table = gate_file,
   output_dir = output_dir,
   summary_filters = list(
     `PanCK+` = ~PanCKp,
