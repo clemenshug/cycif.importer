@@ -1,6 +1,6 @@
 Package: cycif.importer
 Title: CyCIF Analysis Pipeline for Multiplexed Tissue Imaging Data
-Version: 0.1.4
+Version: 0.1.5
 Authors@R:
     person("Clemens", "Hug", , "clemens.hug@gmail.com", role = c("aut", "cre"))
 Description: A comprehensive toolkit for analyzing CyCIF (Cyclic Immunofluorescence)

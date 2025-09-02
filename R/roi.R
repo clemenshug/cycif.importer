@@ -54,7 +54,7 @@ cycif_assign_rois <- function(
   }
   if (nrow(overlap_analysis$details) > 0) {
     solvable_issues <- if (!is.null(roi_priority))
-      c("large_overlap", "fully_contained")
+      c("large_overlap", "fully_contained", "small_overlap")
     else
       character(0)
 
@@ -238,18 +238,6 @@ assign_rois_to_cells <- function(data, roi_data, scale_factor, roi_priority = NU
   # Use spatial intersection to find which cells are in which ROIs
   intersections <- sf::st_within(cell_points, roi_data)
 
-  n_multiple_roi <- sum(purrr::map_int(intersections, length) > 1)
-  if (n_multiple_roi > 0) {
-    if (is.null(roi_priority)) {
-      warning(
-        sprintf(
-          "Found %d cells in multiple ROIs. Assigning first ROI only. Alternatively, provide `roi_priority` to resolve conflicts.",
-          n_multiple_roi
-        )
-      )
-    }
-  }
-
   # Select ROI based on priority or default to first
   roi_ids <- purrr::map_int(intersections, function(x) {
     if (length(x) == 0) {
@@ -263,6 +251,15 @@ assign_rois_to_cells <- function(data, roi_data, scale_factor, roi_priority = NU
       # Use which.min to find the ROI with highest priority (lowest index)
       # Handle NAs by assigning low priority
       priority_order[is.na(priority_order)] <- length(roi_priority) + 1
+      if (all(is.na(priority_order))) {
+        stop(
+          sprintf(
+            "Unable to assign ROI based on priority. None of the overlapping ROIs (%s) are in the provided roi_priority list (%s).",
+            paste(roi_names, collapse = ", "),
+            paste(roi_priority, collapse = ", ")
+          )
+        )
+      }
       selected_idx <- which.min(priority_order)
       x[selected_idx]
     }
