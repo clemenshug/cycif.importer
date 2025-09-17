@@ -129,7 +129,14 @@ resolve_polygon_overlaps <- function(polygon_df) {
   ))
 
   # Find all overlapping pairs once
-  overlaps <- find_polygon_overlaps(polygon_sf) |>
+  overlaps <- find_polygon_overlaps(polygon_sf)
+
+  if (nrow(overlaps) == 0) {
+    message("No overlaps found")
+    return(polygon_sf)
+  }
+
+  overlaps <- overlaps |>
     dplyr::rowwise() |>
     dplyr::mutate(
       reason = {
@@ -143,11 +150,6 @@ resolve_polygon_overlaps <- function(polygon_df) {
       }
     ) |>
     dplyr::ungroup()
-
-  if (nrow(overlaps) == 0) {
-    message("No overlaps found")
-    return(polygon_sf)
-  }
 
   not_resolvable <- overlaps |>
     tidyr::drop_na(reason)
