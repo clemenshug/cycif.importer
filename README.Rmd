@@ -1,7 +1,5 @@
 ---
 output: github_document
-title: "cycif.importer"
-author: "Clemens Hug"
 ---
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
