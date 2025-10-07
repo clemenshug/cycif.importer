@@ -4,26 +4,37 @@
 \alias{cycif_load_cell_data}
 \title{Load cell data from UNMICST files}
 \usage{
-cycif_load_cell_data(data_dir, slide_filter = NULL)
+cycif_load_cell_data(
+  data_dir,
+  slide_filter = NULL,
+  file_pattern = "*--unmicst_cell.csv*"
+)
 }
 \arguments{
-\item{data_dir}{Directory containing *--unmicst_cell.csv(.gz) files}
+\item{data_dir}{Directory containing cell data files}
 
 \item{slide_filter}{Optional vector of slide names to load}
+
+\item{file_pattern}{Glob pattern for matching files. The first \code{*} indicates
+where the slide name appears in the filename. Default: "\emph{--unmicst_cell.csv}"
+Examples: "Sample_\emph{_cells.csv", "}_data.csv.gz"}
 }
 \value{
 List of data frames by slide name
 }
 \description{
 Loads cell segmentation data from UNMICST CSV files in a directory.
-Files should follow the naming pattern "*--unmicst_cell.csv(.gz)".
+Files should follow the naming pattern specified by \code{file_pattern}.
 }
 \examples{
 \dontrun{
-# Load all cell data files
+# Load all cell data files with default pattern
 cell_data <- cycif_load_cell_data("/path/to/data")
 
 # Load specific slides only
 cell_data <- cycif_load_cell_data("/path/to/data", slide_filter = c("slide1", "slide2"))
+
+# Use custom file pattern
+cell_data <- cycif_load_cell_data("/path/to/data", file_pattern = "Sample_*_cells.csv.gz")
 }
 }

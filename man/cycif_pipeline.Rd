@@ -21,7 +21,9 @@ cycif_pipeline(
   scale_factor = 0.65,
   expand_distance = 50,
   roi_priority = NULL,
-  slide_filter = NULL
+  slide_filter = NULL,
+  cell_file_pattern = "*--unmicst_cell.csv*",
+  roi_file_pattern = "*-rois.csv"
 )
 }
 \arguments{
@@ -69,6 +71,12 @@ set to 0 to disable)}
 ROI with highest priority. If NULL, assigns first overlapping ROI.}
 
 \item{slide_filter}{Optional vector of slide names to process}
+
+\item{cell_file_pattern}{Glob pattern for matching cell data files. The first
+\code{*} indicates where the slide name appears. Default: "\emph{--unmicst_cell.csv}"}
+
+\item{roi_file_pattern}{Glob pattern for matching ROI files. The first \code{*}
+indicates where the slide name appears. Default: "*-rois.csv"}
 }
 \value{
 List with analysis results (also saves files to \code{output_dir})
@@ -103,6 +111,14 @@ results <- cycif_pipeline(
   summary_filters = list("CD8+" = ~CD8ap, "CD4+" = ~CD4p),
   sample_size = 25000,
   sampling_mode = "roi_only"
+)
+
+# Custom file patterns
+results <- cycif_pipeline(
+  counts = "/path/to/data",
+  output_dir = "/path/to/output",
+  cell_file_pattern = "Sample_*_cells.csv.gz",
+  roi_file_pattern = "Sample_*_rois.csv"
 )
 }
 }

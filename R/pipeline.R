@@ -32,6 +32,10 @@
 #'   (first trumps later). When a cell overlaps multiple ROIs, assigns the
 #'   ROI with highest priority. If NULL, assigns first overlapping ROI.
 #' @param slide_filter Optional vector of slide names to process
+#' @param cell_file_pattern Glob pattern for matching cell data files. The first
+#'   `*` indicates where the slide name appears. Default: "*--unmicst_cell.csv*"
+#' @param roi_file_pattern Glob pattern for matching ROI files. The first `*`
+#'   indicates where the slide name appears. Default: "*-rois.csv"
 #'
 #' @return List with analysis results (also saves files to `output_dir`)
 #' @export
@@ -63,7 +67,6 @@
 #'   sample_size = 25000,
 #'   sampling_mode = "roi_only"
 #' )
-#' }
 cycif_pipeline <- function(
   counts,
   rois = NULL,
@@ -84,7 +87,9 @@ cycif_pipeline <- function(
   scale_factor = 0.65,
   expand_distance = 50,
   roi_priority = NULL,
-  slide_filter = NULL
+  slide_filter = NULL,
+  cell_file_pattern = "*--unmicst_cell.csv*",
+  roi_file_pattern = "*-rois.csv"
 ) {
 
   message("Starting complete CyCIF pipeline...")
@@ -93,7 +98,7 @@ cycif_pipeline <- function(
   cell_data <- resolve_input_data(
     counts,
     cycif_load_cell_data,
-    list(slide_filter = slide_filter),
+    list(slide_filter = slide_filter, file_pattern = cell_file_pattern),
     "cell data"
   )
 
@@ -103,7 +108,7 @@ cycif_pipeline <- function(
   }
   roi_data <- resolve_input_data(
     rois,
-    function(path) cycif_load_roi_data(path, names(cell_data)),
+    function(path) cycif_load_roi_data(path, names(cell_data), file_pattern = roi_file_pattern),
     list(),
     "ROI data"
   )
